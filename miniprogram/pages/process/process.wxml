@@ -1,0 +1,130 @@
+<!--pages/process/process.wxml-->
+<view class="container">
+  <!-- 处理状态头部 -->
+  <view class="process-header">
+    <view class="status-info">
+      <text class="status-text">{{statusText}}</text>
+      <text class="image-count">{{currentIndex + 1}}/{{images.length}}</text>
+    </view>
+    
+    <!-- 进度条 -->
+    <view class="progress-container">
+      <view class="progress">
+        <view class="progress-bar" style="width: {{progress}}%"></view>
+      </view>
+      <text class="progress-text">{{progress}}%</text>
+    </view>
+  </view>
+
+  <!-- 已选择图片缩略图 -->
+  <view class="thumbs-section" wx:if="{{images.length > 1 && !isProcessing && !processedImage}}">
+    <view class="section-header">
+      <text class="section-title">已选择图片</text>
+      <text class="section-count">{{images.length}} 张</text>
+    </view>
+    <view class="thumb-grid">
+      <block wx:for="{{images}}" wx:key="path">
+        <view class="thumb-item {{index === currentIndex ? 'active' : ''}}" data-index="{{index}}" bindtap="onThumbTap">
+          <image class="thumb-image" src="{{item.path}}" mode="aspectFill"></image>
+        </view>
+      </block>
+    </view>
+  </view>
+
+  <!-- 图片预览区域 -->
+  <view class="preview-section">
+    <!-- 原图预览 -->
+    <view class="image-container">
+      <view class="image-header">
+        <text class="image-label">原图</text>
+        <text class="image-size">{{originalSize}}</text>
+      </view>
+      <view class="image-wrapper">
+        <image 
+          class="preview-image" 
+          src="{{currentImage.path}}" 
+          mode="aspectFit"
+          bindload="onOriginalImageLoad"
+        ></image>
+        <view class="image-overlay" wx:if="{{isProcessing}}">
+          <view class="loading-spinner"></view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 对比箭头 -->
+    <view class="compare-arrow" wx:if="{{processedImage}}">
+      <image src="../../images/arrow-right.png" class="arrow-icon"></image>
+      <text class="arrow-text">AI优化</text>
+    </view>
+
+    <!-- 处理后预览 -->
+    <view class="image-container" wx:if="{{processedImage}}">
+      <view class="image-header">
+        <text class="image-label enhanced">优化后</text>
+        <text class="image-size">{{processedSize}}</text>
+      </view>
+      <view class="image-wrapper">
+        <image 
+          class="preview-image enhanced" 
+          src="{{processedImage}}" 
+          mode="aspectFit"
+          bindload="onProcessedImageLoad"
+          bindtap="previewProcessed"
+        ></image>
+        <!-- 优化标识 -->
+        <view class="enhancement-badge" catchtap="previewProcessed">
+          <image src="../../images/check-circle.png" class="badge-icon"></image>
+          <text class="badge-text">已优化</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 处理选项 (已移除模式选择) -->
+  <view class="process-options" wx:if="{{!isProcessing && !processedImage}}">
+    <view class="option-title">准备将图片处理成扫描件样式</view>
+    <view class="tips-list" style="padding: 0 30rpx;">
+      <text class="tip-item">• AI将自动识别并增强文字</text>
+      <text class="tip-item">• 移除背景杂质，生成纯白底色</text>
+    </view>
+  </view>
+
+  <!-- 操作按钮 -->
+  <view class="action-buttons">
+    <!-- 处理中状态 -->
+    <view wx:if="{{isProcessing}}" class="processing-info">
+      <view class="loading-dots">
+        <view class="dot"></view>
+        <view class="dot"></view>
+        <view class="dot"></view>
+      </view>
+      <text class="processing-text">{{processingText}}</text>
+    </view>
+
+    <!-- 未处理状态 -->
+    <view wx:elif="{{!processedImage}}" class="button-group">
+      <button class="btn btn-outline" bindtap="goBack">返回选择</button>
+      <button class="btn btn-primary" bindtap="startProcess">开始优化</button>
+    </view>
+
+    <!-- 已处理状态 -->
+    <view wx:else class="button-group">
+      <button class="btn btn-outline" bindtap="processNext" wx:if="{{hasMoreImages}}">
+        处理下一张
+      </button>
+      <button class="btn btn-outline" bindtap="reprocess">重新处理</button>
+      <button class="btn btn-primary" bindtap="viewResult">查看结果</button>
+    </view>
+  </view>
+
+  <!-- 处理提示 -->
+  <view class="tips-section" wx:if="{{!isProcessing && !processedImage}}">
+    <view class="tips-title">💡 处理提示</view>
+    <view class="tips-list">
+      <text class="tip-item">• 建议选择光线充足的照片</text>
+      <text class="tip-item">• 处理时间约10-30秒</text>
+      <text class="tip-item">• 支持JPG、PNG格式</text>
+    </view>
+  </view>
+</view>

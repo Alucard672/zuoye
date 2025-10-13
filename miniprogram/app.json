@@ -1,0 +1,16 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/process/process",
+    "pages/result/result"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#4A90E2",
+    "navigationBarTitleText": "作业清晰",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F8F9FB"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

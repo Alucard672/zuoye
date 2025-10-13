@@ -1,0 +1,10 @@
+{
+  "name": "imageProcess",
+  "version": "1.1.0",
+  "description": "图像处理云函数（使用Jimp）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.4.0",
+    "jimp": "^0.22.10"
+  }
+}

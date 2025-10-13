@@ -1,0 +1,42 @@
+# 图片资源文件夹
+
+这个文件夹用于存放小程序所需的图片资源。
+
+## 需要的图片文件：
+
+### 图标类
+- logo.png - 应用Logo
+- upload-icon.png - 上传图标
+- chat-icon.png - 聊天记录图标
+- album-icon.png - 相册图标
+- check-icon.png - 检查图标
+- print-icon.png - 打印图标
+- success-icon.png - 成功图标
+- arrow-right.png - 右箭头
+- check-circle.png - 圆形检查图标
+
+### 功能图标
+- auto-icon.png - 智能优化图标
+- enhance-icon.png - 深度增强图标
+- download-icon.png - 下载图标
+- save-icon.png - 保存图标
+- wechat-icon.png - 微信图标
+- add-icon.png - 添加图标
+- home-icon.png - 首页图标
+
+### 分享相关
+- friend-icon.png - 好友图标
+- group-icon.png - 群聊图标
+- share-cover.png - 分享封面图
+
+## 图片规格建议：
+- 图标：48x48px, 96x96px, 120x120px (适配不同尺寸)
+- Logo：80x80px
+- 分享封面：500x400px
+- 格式：PNG（支持透明背景）
+
+## 注意事项：
+1. 所有图片应遵循设计文档的配色方案
+2. 图标应保持一致的设计风格
+3. 文件大小尽量控制在合理范围内
+4. 使用有意义的文件命名

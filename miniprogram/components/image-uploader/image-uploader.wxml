@@ -1,0 +1,74 @@
+<!--components/image-uploader/image-uploader.wxml-->
+<view class="image-uploader">
+  <!-- 上传区域 -->
+  <view class="upload-area {{isDragging ? 'dragging' : ''}}" bindtap="chooseImage">
+    <view class="upload-content">
+      <image src="../../images/album-icon.png" class="upload-icon"></image>
+      <text class="upload-text">{{uploadText}}</text>
+      <text class="upload-hint">{{uploadHint}}</text>
+    </view>
+  </view>
+
+  <!-- 图片预览列表 -->
+  <view class="image-list" wx:if="{{imageList.length > 0}}">
+    <view 
+      wx:for="{{imageList}}" 
+      wx:key="id"
+      class="image-item"
+    >
+      <view class="image-wrapper">
+        <image 
+          src="{{item.path}}" 
+          class="preview-image"
+          mode="aspectFill"
+          bindtap="previewImage"
+          data-index="{{index}}"
+        ></image>
+        
+        <!-- 删除按钮 -->
+        <view 
+          class="delete-btn"
+          bindtap="deleteImage"
+          data-index="{{index}}"
+        >
+          <text class="delete-icon">×</text>
+        </view>
+        
+        <!-- 状态标识 -->
+        <view class="status-badge {{item.status}}" wx:if="{{item.status}}">
+          <text class="status-text">{{getStatusText(item.status)}}</text>
+        </view>
+        
+        <!-- 进度条 -->
+        <view class="progress-overlay" wx:if="{{item.uploading}}">
+          <view class="progress-bar">
+            <view class="progress-fill" style="width: {{item.progress}}%"></view>
+          </view>
+          <text class="progress-text">{{item.progress}}%</text>
+        </view>
+      </view>
+      
+      <!-- 图片信息 -->
+      <view class="image-info">
+        <text class="image-name">{{item.name}}</text>
+        <text class="image-size">{{item.sizeText}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 添加更多按钮 -->
+  <view 
+    class="add-more-btn" 
+    wx:if="{{imageList.length > 0 && imageList.length < maxCount}}"
+    bindtap="chooseImage"
+  >
+    <text class="add-icon">+</text>
+    <text class="add-text">添加更多</text>
+  </view>
+
+  <!-- 批量操作 -->
+  <view class="batch-actions" wx:if="{{imageList.length > 1}}">
+    <button class="action-btn" bindtap="clearAll">清空全部</button>
+    <button class="action-btn primary" bindtap="processAll">处理全部</button>
+  </view>
+</view>

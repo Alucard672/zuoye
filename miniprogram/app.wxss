@@ -1,0 +1,177 @@
+/**app.wxss**/
+/* 全局样式 - 基于设计文档的配色方案 */
+
+page {
+  background-color: #F8F9FB;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', STHeiTi, sans-serif;
+  color: #333333;
+  font-size: 32rpx;
+  line-height: 1.6;
+}
+
+/* 主色调定义 */
+.primary-color { color: #4A90E2; }
+.accent-color { color: #FFD05B; }
+.text-primary { color: #333333; }
+.text-secondary { color: #888888; }
+.bg-primary { background-color: #4A90E2; }
+.bg-accent { background-color: #FFD05B; }
+.bg-light { background-color: #F8F9FB; }
+
+/* 通用容器样式 */
+.container {
+  padding: 40rpx;
+  min-height: 100vh;
+}
+
+/* 卡片样式 */
+.card {
+  background: #FFFFFF;
+  border-radius: 32rpx;
+  padding: 40rpx;
+  margin-bottom: 32rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
+}
+
+/* 按钮样式 */
+.btn {
+  border-radius: 32rpx;
+  font-size: 32rpx;
+  font-weight: 500;
+  border: none;
+  padding: 24rpx 48rpx;
+  margin: 16rpx 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary {
+  background: #4A90E2;
+  color: #FFFFFF;
+}
+
+.btn-primary:active {
+  background: #3A7BC8;
+}
+
+.btn-accent {
+  background: #FFD05B;
+  color: #333333;
+}
+
+.btn-accent:active {
+  background: #E6BB52;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 2rpx solid #4A90E2;
+  color: #4A90E2;
+}
+
+.btn-outline:active {
+  background: #4A90E2;
+  color: #FFFFFF;
+}
+
+/* 标题样式 */
+.title {
+  font-size: 48rpx;
+  font-weight: 600;
+  color: #333333;
+  text-align: center;
+  margin-bottom: 32rpx;
+}
+
+.subtitle {
+  font-size: 32rpx;
+  color: #888888;
+  text-align: center;
+  margin-bottom: 48rpx;
+}
+
+/* 图标样式 */
+.icon {
+  width: 48rpx;
+  height: 48rpx;
+  margin-right: 16rpx;
+}
+
+.icon-large {
+  width: 120rpx;
+  height: 120rpx;
+}
+
+/* 上传区域样式 */
+.upload-area {
+  border: 4rpx dashed #4A90E2;
+  border-radius: 32rpx;
+  padding: 80rpx 40rpx;
+  text-align: center;
+  background: #FFFFFF;
+  margin: 32rpx 0;
+}
+
+.upload-area.active {
+  border-color: #FFD05B;
+  background: #FFFBF0;
+}
+
+/* 进度条样式 */
+.progress {
+  width: 100%;
+  height: 8rpx;
+  background: #E5E5E5;
+  border-radius: 4rpx;
+  overflow: hidden;
+  margin: 32rpx 0;
+}
+
+.progress-bar {
+  height: 100%;
+  background: #4A90E2;
+  border-radius: 4rpx;
+  transition: width 0.3s ease;
+}
+
+/* 图片预览样式 */
+.image-preview {
+  width: 100%;
+  border-radius: 16rpx;
+  margin: 32rpx 0;
+}
+
+/* 加载动画 */
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 80rpx;
+}
+
+/* 工具类 */
+.flex {
+  display: flex;
+}
+
+.flex-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.flex-column {
+  flex-direction: column;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.mb-16 { margin-bottom: 16rpx; }
+.mb-32 { margin-bottom: 32rpx; }
+.mb-48 { margin-bottom: 48rpx; }
+
+.mt-16 { margin-top: 16rpx; }
+.mt-32 { margin-top: 32rpx; }
+.mt-48 { margin-top: 48rpx; }

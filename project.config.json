@@ -1,0 +1,53 @@
+{
+  "description": "作业清晰 - 优化作业照片清晰度的微信小程序",
+  "packOptions": {
+    "ignore": [
+      { "type": "glob", "value": "cloudbase/**" },
+      { "type": "glob", "value": "tools/**" },
+      { "type": "glob", "value": "**/node_modules/**" },
+      { "type": "glob", "value": "**/*.map" },
+      { "type": "glob", "value": "**/*.dylib" }
+    ],
+    "include": [
+      { "type": "glob", "value": "images/**" }
+    ]
+  },
+  "setting": {
+    "bundle": false,
+    "userConfirmedBundleSwitch": false,
+    "urlCheck": true,
+    "scopeDataCheck": false,
+    "coverView": true,
+    "es6": true,
+    "postcss": true,
+    "compileHotReLoad": false,
+    "lazyloadPlaceholderEnable": false,
+    "preloadBackgroundData": false,
+    "minified": true,
+    "autoAudits": false,
+    "newFeature": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": false,
+    "useIsolateContext": true,
+    "nodeModules": false,
+    "enhance": true,
+    "useMultiFrameRuntime": true,
+    "useApiHook": true,
+    "useApiHostProcess": true,
+    "showShadowRootInWxmlPanel": true,
+    "packNpmManually": false,
+    "enableEngineNative": false,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "showES6CompileOption": false,
+    "minifyWXML": true
+  },
+  "compileType": "miniprogram",
+  "miniprogramRoot": "miniprogram/",
+  "libVersion": "2.19.4",
+  "appid": "wx95d550b58b8aaa2b",
+  "projectname": "assignment-clarity",
+  "cloudfunctionRoot": "cloudfunctions/",
+  "condition": {},
+  "cloudbaseRoot": "cloudbase/"
+}

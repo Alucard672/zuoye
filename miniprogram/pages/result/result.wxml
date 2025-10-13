@@ -1,0 +1,148 @@
+<!--pages/result/result.wxml-->
+<view class="container">
+  <!-- 结果头部 -->
+  <view class="result-header">
+    <view class="success-icon">
+      <image src="../../images/success-icon.png" class="icon-large"></image>
+    </view>
+    <text class="success-title">优化完成！</text>
+    <text class="success-subtitle">图片清晰度已显著提升</text>
+  </view>
+
+  <!-- 图片对比展示 -->
+  <view class="comparison-section">
+
+
+    <!-- 对比模式 -->
+
+
+    <!-- 优化结果模式 -->
+    <view class="optimized-view" wx:if="{{activeTab === 'optimized'}}">
+      <view class="optimized-image-container" bindtap="previewImage" data-src="{{processedImages[currentImageIndex].processed}}">
+        <image 
+          class="optimized-image" 
+          src="{{processedImages[currentImageIndex].processed}}" 
+          mode="aspectFit"
+          bindtap="previewImage"
+          data-src="{{processedImages[currentImageIndex].processed}}"
+        ></image>
+        <view class="image-info">
+          <view class="info-item">
+            <text class="info-label">优化模式：</text>
+            <text class="info-value">{{getModeText(processedImages[currentImageIndex].mode)}}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-label">处理状态：</text>
+            <text class="info-value success">已完成</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 选择拼接：勾选列表 -->
+    <view class="select-section" wx:if="{{processedImages.length > 1}}">
+      <view class="select-header">
+        <text>选择需要拼接的图片（已选 {{selectedCount}} 张）</text>
+      </view>
+      <checkbox-group bindchange="onSelectChange">
+        <view class="select-list">
+          <block wx:for="{{processedImages}}" wx:key="processed">
+            <view class="select-item">
+              <checkbox value="{{index}}" checked="{{selectedMap[index]}}"></checkbox>
+              <image class="select-thumb" src="{{item.processed}}" mode="aspectFill" bindtap="previewImage" data-src="{{item.processed}}"></image>
+            </view>
+          </block>
+        </view>
+      </checkbox-group>
+      <button class="btn btn-primary" bindtap="stitchSelected">拼接所选</button>
+      <button class="btn btn-outline" wx:if="{{stitchedPath}}" bindtap="saveStitched" style="margin-top:16rpx;">保存拼接结果</button>
+    </view>
+
+    <!-- 多图切换 -->
+
+  </view>
+
+  <!-- 操作按钮区域 -->
+  <view class="action-section">
+    <view class="primary-actions">
+
+      
+      <button class="btn btn-accent" bindtap="saveToAlbum">
+        <image src="../../images/save-icon.png" class="btn-icon"></image>
+        <text>保存到相册</text>
+      </button>
+    </view>
+
+    <view class="secondary-actions">
+      <button class="btn btn-outline" bindtap="shareToWechat">
+        <image src="../../images/wechat-icon.png" class="btn-icon"></image>
+        <text>分享到微信</text>
+      </button>
+      
+      <button class="btn btn-outline" bindtap="printImage">
+        <image src="../../images/print-icon.png" class="btn-icon"></image>
+        <text>连接打印机</text>
+      </button>
+    </view>
+  </view>
+
+  <!-- 满意度评价 -->
+  <view class="feedback-section">
+    <view class="feedback-title">对优化效果满意吗？</view>
+    <view class="rating-stars">
+      <view 
+        wx:for="{{5}}" 
+        wx:key="index"
+        class="star {{index < rating ? 'active' : ''}}"
+        bindtap="setRating"
+        data-rating="{{index + 1}}"
+      >
+        <text>★</text>
+      </view>
+    </view>
+    <text class="rating-text" wx:if="{{rating > 0}}">{{getRatingText(rating)}}</text>
+  </view>
+
+  <!-- 底部操作 -->
+  <view class="bottom-actions">
+    <button class="btn btn-ghost" bindtap="processMore">
+      <image src="../../images/add-icon.png" class="btn-icon"></image>
+      <text>处理更多图片</text>
+    </button>
+    
+    <button class="btn btn-ghost" bindtap="goHome">
+      <image src="../../images/home-icon.png" class="btn-icon"></image>
+      <text>返回首页</text>
+    </button>
+  </view>
+
+  <!-- 使用提示 -->
+  <view class="tips-section">
+    <view class="tips-title">💡 打印建议</view>
+    <view class="tips-content">
+      <text class="tip-item">• 建议使用激光打印机获得最佳效果</text>
+      <text class="tip-item">• 选择"高质量"打印模式</text>
+      <text class="tip-item">• 使用80g以上的纸张</text>
+    </view>
+  </view>
+</view>
+
+<!-- 分享弹窗 -->
+<view class="share-modal" wx:if="{{showShareModal}}" bindtap="hideShareModal">
+  <view class="share-content" catchtap="stopPropagation">
+    <view class="share-header">
+      <text class="share-title">分享优化结果</text>
+      <view class="close-btn" bindtap="hideShareModal">×</view>
+    </view>
+    <view class="share-options">
+      <view class="share-option" bindtap="shareToFriend">
+        <image src="../../images/friend-icon.png" class="share-icon"></image>
+        <text>发送给朋友</text>
+      </view>
+      <view class="share-option" bindtap="shareToGroup">
+        <image src="../../images/group-icon.png" class="share-icon"></image>
+        <text>分享到群聊</text>
+      </view>
+    </view>
+  </view>
+</view>
