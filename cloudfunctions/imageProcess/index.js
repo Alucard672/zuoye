@@ -42,8 +42,8 @@ exports.main = async (event, context) => {
 
   // 前端可选参数：ops（逐张操作）、布局与输出模式
   const ops = Array.isArray(event && event.ops) ? event.ops : [];
-  let outputMode = (event && event.outputMode) || 'pages'; // 'perImage' 或 'pages'
-  if (outputMode !== 'pages' && outputMode !== 'perImage') outputMode = 'pages';
+  // 按需调整：默认采用单张输出，不分页、不拼接
+  let outputMode = 'perImage';
   const layout = (event && event.layout) || {};
   const pageCfg = layout.page || {};
   // 支持自定义纸张尺寸；默认沿用 A4
@@ -61,23 +61,17 @@ exports.main = async (event, context) => {
       const dl = await cloud.downloadFile({ fileID: files[i] });
       const buffer = dl.fileContent;
 
-      // 先完成清晰化与二值化
-      let img = await processSingle(buffer);
+      // 先完成清晰化（默认不二值化，保留灰度细节）
+      let img = await processSingle(buffer, event && event.options);
 
-      // 文字方向纠正：如未指定跳过，则自动纠正
-      if (!(ops[i] && ops[i].skipAutoOrientation)) {
-        img = ensureUprightByText(img);
-      }
+      // 保持原始方向：不做自动旋转纠正
 
       // 应用前端手动操作（旋转/翻转）
       if (ops[i]) {
         img = applyOps(img, ops[i]);
       }
 
-      // 统一缩放到约 targetMM 宽（保留留白；不降质只按宽度同比缩放）
-      if (img.bitmap.width !== TARGET_PX_LOCAL) {
-        img = img.resize(TARGET_PX_LOCAL, Jimp.AUTO);
-      }
+      // 维持原图比例与尺寸（不再强制缩放到 TARGET_PX_LOCAL）
 
       processed.push(img);
     }
@@ -158,19 +152,92 @@ exports.main = async (event, context) => {
 };
 
 // 单张清晰化 + 抑制背面透字 + 小连通域过滤（性能优化：宽度>1600先缩）
-async function processSingle(buffer) {
+async function processSingle(buffer, options) {
   let img = await Jimp.read(buffer);
 
-  if (img.bitmap.width > 1600) {
+  // 保持原尺寸；仅在超大图时做适度下采样以控内存
+  if (img.bitmap.width > 2000) {
     img = img.resize(1600, Jimp.AUTO);
   }
 
-  // 轻度预处理：避免强对比造成大片全黑
-  img
-    .grayscale()
-    .brightness(0.02)
-    .contrast(0.2)
-    .gaussian(1);
+  const {
+    version = 'v2', // Default to new version. v1: selective brightening, v2: adaptive normalization
+  } = options || {};
+
+  img.grayscale();
+
+  if (version === 'v2') {
+    // v2: Adaptive background normalization. Optimized for performance.
+    console.log('Using image processing v2: adaptive normalization (optimized)');
+
+    // Optimization: Downscale for fast background estimation, then upscale.
+    const smallWidth = 200; // Further reduce size for speed
+    const background = img.clone()
+      .resize(smallWidth, Jimp.AUTO) // Shrink
+      .gaussian(10) // Reduce blur radius for speed
+      .resize(img.bitmap.width, img.bitmap.height, Jimp.RESIZE_BICUBIC); // Scale back up
+
+    const contrastFactor = 1.5;
+    const targetBg = 255; // Target background color (pure white)
+
+    img.scan(0, 0, img.bitmap.width, img.bitmap.height, function (x, y, idx) {
+      const originalLum = this.bitmap.data[idx];
+      const backgroundLum = background.bitmap.data[idx];
+
+      // Normalize: (original - background) * contrast + target_background
+      let newVal = (originalLum - backgroundLum) * contrastFactor + targetBg;
+      newVal = Math.max(0, Math.min(255, newVal)); // Clamp to 0-255
+
+      this.bitmap.data[idx + 0] = newVal;
+      this.bitmap.data[idx + 1] = newVal;
+      this.bitmap.data[idx + 2] = newVal;
+    });
+
+  } else {
+    // v1: Selective brightening based on global thresholds. Simpler, faster.
+    console.log('Using image processing v1: selective brightening');
+    // 作为背景参考的轻度模糊副本（仅用于高亮区域的去噪）
+    const blurred = img.clone().gaussian(2);
+
+    const src = img.bitmap.data;
+    const blurData = blurred.bitmap.data;
+
+    // 阈值可按需调整
+    const T_BG = 180;     // 背景高亮阈值：更高的像素视为背景
+    const T_MID = 140;    // 中灰阈值：轻微提亮，避免灰底
+    const LIFT_BG = 16;   // 背景提升幅度（提亮）
+    const LIFT_MID = 6;   // 中灰轻提升
+    const DARKEN_TEXT = 4;// 暗文字轻微加深，提升对比
+
+    for (let i = 0; i < src.length; i += 4) {
+      // 灰度图：R=G=B，任选一个通道即可
+      const g = src[i];
+      let v = g;
+
+      if (g >= T_BG) {
+        // 背景：用模糊值替换以去噪 + 小幅提亮
+        v = blurData[i];
+        v = Math.min(255, v + LIFT_BG);
+      } else if (g >= T_MID) {
+        // 中灰：仅轻微提亮，保留细节
+        v = Math.min(255, g + LIFT_MID);
+      } else {
+        // 暗文字与下划线：轻微加深，保护细节，不做平滑
+        v = Math.max(0, g - DARKEN_TEXT);
+      }
+
+      src[i] = v;
+      src[i + 1] = v;
+      src[i + 2] = v;
+      // alpha 保持不变
+    }
+  }
+
+  // 若未显式要求二值化，则直接返回增强后的灰度图，最大化保留细节
+  const doBinary = options && options.binary === true;
+  if (!doBinary) {
+    return img;
+  }
 
   const { width, height, data } = img.bitmap;
 
@@ -189,8 +256,9 @@ async function processSingle(buffer) {
     }
   }
 
-  const R = 10; // 窗口半径，约21x21
-  const bias = 12; // 偏置，前景需比局部均值更暗一点
+  // 保守二值化参数（仅在 options.binary=true 时使用），更利于保留细线
+  const R = 10;
+  const bias = 10;
   for (let y = 0; y < height; y++) {
     const y0 = Math.max(0, y - R), y1 = Math.min(height - 1, y + R);
     for (let x = 0; x < width; x++) {
@@ -216,6 +284,7 @@ async function processSingle(buffer) {
   const visited = new Uint8Array(width * height);
   const posIndex = (x, y) => (width * y + x);
   const dirs = [[-1,0],[1,0],[0,-1],[0,1],[ -1,-1 ],[ -1,1 ],[ 1,-1 ],[ 1,1 ]];
+  // 保守的小连通域过滤阈值，尽量保留细线条（如下划线）
   const areaThreshold = Math.max(25, Math.floor((width * height) * 0.00002));
 
   for (let y = 0; y < height; y++) {
