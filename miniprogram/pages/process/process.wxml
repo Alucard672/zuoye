@@ -7,13 +7,7 @@
       <text class="image-count">{{currentIndex + 1}}/{{images.length}}</text>
     </view>
     
-    <!-- 进度条 -->
-    <view class="progress-container">
-      <view class="progress">
-        <view class="progress-bar" style="width: {{progress}}%"></view>
-      </view>
-      <text class="progress-text">{{progress}}%</text>
-    </view>
+    <!-- 进度条（已移除，改为居中悬浮显示） -->
   </view>
 
   <!-- 已选择图片缩略图 -->
@@ -31,12 +25,35 @@
     </view>
   </view>
 
+  <!-- 全屏蒙层，处理中禁止操作 -->
+  <view class="overlay-mask" wx:if="{{isProcessing}}"></view>
+
+  <!-- 居中悬浮进度卡片 -->
+  <view class="progress-float" wx:if="{{isProcessing}}">
+    <view class="progress-card">
+      <view class="progress-title">正在优化</view>
+      <view class="progress-inline">
+        <view class="progress-mini">
+          <view class="progress-mini-bar" style="width: {{progress}}%"></view>
+        </view>
+        <text class="progress-mini-text">{{progress}}%</text>
+      </view>
+      <text class="progress-desc">{{processingText}}</text>
+    </view>
+  </view>
+
   <!-- 图片预览区域 -->
   <view class="preview-section">
     <!-- 原图预览 -->
-    <view class="image-container">
+    <view class="image-container" wx:if="{{hasSelected && currentImage}}">
       <view class="image-header">
-        <text class="image-label">原图</text>
+        <view style="display:flex;align-items:center;">
+          <text class="image-label">原图</text>
+          <view class="rotate-actions">
+            <button class="mini-btn" style="padding: 6rpx 20rpx; font-size: 24rpx;" bindtap="rotateLeft">左旋</button>
+            <button class="mini-btn" style="padding: 6rpx 20rpx; font-size: 24rpx; margin-left: 20rpx;" bindtap="rotateRight">右旋</button>
+          </view>
+        </view>
         <text class="image-size">{{originalSize}}</text>
       </view>
       <view class="image-wrapper">
@@ -45,6 +62,7 @@
           src="{{currentImage.path}}" 
           mode="aspectFit"
           bindload="onOriginalImageLoad"
+          style="transform: rotate({{rotationDeg}}deg); transform-origin: center;"
         ></image>
         <view class="image-overlay" wx:if="{{isProcessing}}">
           <view class="loading-spinner"></view>

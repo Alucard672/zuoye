@@ -1,7 +1,7 @@
 /* pages/result/result.wxss */
 
 .container {
-  padding: 40rpx;
+  padding: 24rpx;
   min-height: 100vh;
 }
 
@@ -178,6 +178,34 @@
   gap: 16rpx;
 }
 
+/* 缩略图勾选网格 */
+.select-section {
+  margin-top: 16rpx;
+}
+
+.select-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  justify-content: flex-start;
+}
+
+.select-item {
+  width: calc((100% - 24rpx) / 3); /* 三列自适应 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.select-thumb {
+  width: 100%;
+  height: 180rpx; /* 更紧凑的缩略图高度 */
+  border-radius: 12rpx;
+  border: 2rpx solid #E5E5E5;
+  background: #F8F9FB;
+}
+
 .nav-dots {
   display: flex;
   gap: 12rpx;
@@ -203,7 +231,7 @@
 
 /* 操作按钮区域 */
 .action-section {
-  margin-bottom: 40rpx;
+  margin-bottom: 24rpx;
 }
 
 .primary-actions {

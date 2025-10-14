@@ -130,11 +130,13 @@ class CloudImageProcessor {
    * @param {function} [progressCallback] - 进度回调函数
    * @returns {Promise<Object>} 处理结果
    */
-  async processImage(imageUrl, progressCallback, maybeThirdArg) {
-    // 兼容旧调用签名：processImage(imagePath, 'auto', progressCallback)
-    // 如果第二参不是函数且第三参是函数，则使用第三参作为回调；否则如果第二参是非函数则置为 undefined
-    if (typeof progressCallback !== 'function') {
-      progressCallback = (typeof maybeThirdArg === 'function') ? maybeThirdArg : undefined
+  async processImage(imageUrl, options, progressCallback) {
+    // Handle optional `options` argument
+    if (typeof options === 'function') {
+      progressCallback = options;
+      options = {};
+    } else {
+      options = options || {};
     }
 
     if (!this.isCloudReady) {
@@ -151,11 +153,16 @@ class CloudImageProcessor {
 
       typeof progressCallback === 'function' && progressCallback(30, '开始云端处理...');
 
-      // 2. 直接调用 'imageProcess' 云函数
+      // 2. 直接调用 'imageProcess' 云函数，请求不保存结果，并传递操作
       const result = await wx.cloud.callFunction({
         name: 'imageProcess',
         data: {
           imageUrl: fileID,
+          options: {
+            version: 'v2'
+          },
+          // 传递 ops
+          ops: options.ops || []
         }
       });
 
@@ -164,7 +171,10 @@ class CloudImageProcessor {
       // 3. 检查云函数返回结果
       if (result.result?.success) {
         const data = result.result.data;
-        // 获取处理后图片的临时URL以便显示
+
+
+
+        // 降级：如果返回了 fileID，则获取临时链接
         const tempURL = await this.getTempFileURL(data.processedFileID || data.processed || data.fileID);
         
         typeof progressCallback === 'function' && progressCallback(100, '处理完成！');
@@ -184,6 +194,7 @@ class CloudImageProcessor {
       }
       
     } catch (error) {
+
       console.error('云端图片处理失败:', error);
       
       // 抛出更友好的错误信息

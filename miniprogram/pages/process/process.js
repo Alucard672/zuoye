@@ -20,25 +20,67 @@ Page({
     processedSize: '',
     hasMoreImages: false,
     networkStatus: null,
-    estimatedTime: 0
+    estimatedTime: 0,
+    rotationDeg: 0,
+    hasSelected: false
   },
 
   onLoad() {
     // 初始化云图像处理器
     this.cloudProcessor = new CloudImageProcessor()
     
-    // 获取传递的图片数据
+    // 获取传递的图片数据（优先：上一页selectedImages；兼容：事件通道；本页images）
     const pages = getCurrentPages()
     const prevPage = pages[pages.length - 2]
-    if (prevPage && prevPage.data.selectedImages) {
-      this.setData({
-        images: prevPage.data.selectedImages,
-        currentImage: prevPage.data.selectedImages[0],
-        hasMoreImages: prevPage.data.selectedImages.length > 1,
-        statusText: '准备优化'
+    let incoming = null
+
+    if (prevPage && prevPage.data && Array.isArray(prevPage.data.selectedImages) && prevPage.data.selectedImages.length > 0) {
+      incoming = prevPage.data.selectedImages
+    }
+
+    // 兼容事件通道传参
+    const ec = this.getOpenerEventChannel ? this.getOpenerEventChannel() : null
+    if (!incoming && ec) {
+      ec.on && ec.on('images', (imgs) => {
+        if (Array.isArray(imgs) && imgs.length > 0) {
+          const app = getApp()
+          app.clearProcessedImages()
+          const isMulti = imgs.length > 1
+          this.setData({
+            images: imgs,
+            currentImage: isMulti ? null : imgs[0],
+            hasMoreImages: isMulti,
+            hasSelected: !isMulti,
+            statusText: isMulti ? '请选择图片' : '准备优化'
+          })
+          if (!isMulti) {
+            this.updateImageInfo()
+            this.checkNetworkAndEstimate()
+          }
+        }
       })
-      this.updateImageInfo()
-      this.checkNetworkAndEstimate()
+    }
+
+    // 回退：若本页已存在 images（例如通过 navigateTo 后 setData 注入）
+    if (!incoming && Array.isArray(this.data.images) && this.data.images.length > 0) {
+      incoming = this.data.images
+    }
+
+    if (incoming && incoming.length > 0) {
+      const app = getApp();
+      app.clearProcessedImages();
+      const isMulti = incoming.length > 1
+      this.setData({
+        images: incoming,
+        currentImage: isMulti ? null : incoming[0],
+        hasMoreImages: isMulti,
+        hasSelected: !isMulti,
+        statusText: isMulti ? '请选择图片' : '准备优化'
+      })
+      if (!isMulti) {
+        this.updateImageInfo()
+        this.checkNetworkAndEstimate()
+      }
     }
   },
 
@@ -92,9 +134,17 @@ Page({
 
   // 开始处理
   async startProcess() {
+    if (this.data.isProcessing) return; // 防止重复点击
+
+    // 若当前未设置图片，提示先选择
+    if (!this.data.currentImage && Array.isArray(this.data.images) && this.data.images.length > 0) {
+      showError('请先在上方选择一张图片');
+      return;
+    }
+
     if (!this.data.currentImage) {
-      showError('请先选择图片')
-      return
+      showError('请先选择图片');
+      return;
     }
 
     // 检查网络连接
@@ -103,8 +153,8 @@ Page({
         title: '无网络连接',
         content: '图片处理需要网络连接，请检查网络后重试',
         showCancel: false
-      })
-      return
+      });
+      return;
     }
 
     this.setData({
@@ -112,186 +162,56 @@ Page({
       progress: 0,
       statusText: '正在处理',
       processingText: '连接云端处理服务...'
-    })
+    });
 
+    const app = getApp();
     try {
-      // 根据选择数量决定：单张优化 或 多张拼接为A4
-      let result
-      const imgs = this.data.images || []
+      const imgs = this.data.images || [];
+
+      // 批量处理逻辑
       if (imgs.length > 1) {
-        // 批量模式：逐张处理，显示总进度与当前序号
-        const app = getApp()
-        const total = imgs.length
-        const processedList = []
+        app.globalData.isBatchProcessing = true;
+        this.__batchMode = true;
+        const total = imgs.length;
         for (let i = 0; i < total; i++) {
-          const img = imgs[i]
+          const img = imgs[i];
           this.setData({
             processingText: `正在处理第 ${i + 1}/${total} 张...`,
-            currentIndex: i
-          })
-          const single = await this.cloudProcessor.processImage(
-            img.path,
-            (p, text) => {
-              const overall = Math.round(((i + p / 100) / total) * 100)
-              this.setData({
-                progress: overall,
-                processingText: `第 ${i + 1}/${total} 张：${text || ''}`
-              })
-            }
-          )
-          // 写入全局与本地列表
-          const tempURL = await this.cloudProcessor.getTempFileURL(single.processed)
-          processedList.push({
-            original: img.path,
-            processed: tempURL,
-            processedFileID: single.processed,
-            mode: 'scanned',
-            metadata: single.metadata,
-            processTime: single.processTime
-          })
-          app.addProcessedImage(processedList[processedList.length - 1])
+            currentIndex: i,
+            currentImage: img // 更新当前处理的图片
+          });
+          await this.processSingleImage(img.path, (p, text) => {
+            const overall = Math.round(((i + p / 100) / total) * 100);
+            this.setData({
+              progress: overall,
+              processingText: `第 ${i + 1}/${total} 张：${text || ''}`
+            });
+          });
         }
-        // 批量完成后，显示最后一张为“优化后”，并跳转结果页
-        const last = processedList[processedList.length - 1]
-        wx.getImageInfo({
-          src: last.processed,
-          success: (res) => {
-            this.setData({
-              processedImage: last.processed,
-              processedFileID: last.processedFileID,
-              isProcessing: false,
-              statusText: '批量处理完成',
-              processedSize: `${res.width}×${res.height}`,
-              progress: 100,
-              hasMoreImages: false
-            })
-            showSuccess(`共处理 ${processedList.length} 张`)
-          }
-        })
-        // 直接进入结果页（用户手动选择拼接）
-        wx.navigateTo({ url: '/pages/result/result' })
-        return
-      } else {
-        result = await this.cloudProcessor.processImage(
-          this.data.currentImage.path,
-          (progress, text) => {
-            this.setData({
-              progress: Math.round(progress),
-              processingText: text
-            })
-          }
-        )
+        this.setData({
+          isProcessing: false,
+          statusText: '批量处理完成',
+          progress: 100,
+          hasMoreImages: false
+        });
+        this.__batchMode = false;
+        app.globalData.isBatchProcessing = false;
+        showSuccess(`共处理 ${imgs.length} 张`);
+        wx.navigateTo({ url: '/pages/result/result' });
+        return;
       }
 
-      if (!result.success) {
-        throw new Error('处理失败')
-      }
-
-      // 分支：多页拼接或单张
-      const app = getApp()
-
-      if (result.pages && result.pageCount) {
-        // 多页拼接结果
-        const firstPage = result.pages[0]
-        const tempURL = firstPage.tempFileURL
-
-        wx.getImageInfo({
-          src: tempURL,
-          success: (res) => {
-            this.setData({
-              processedImage: tempURL,
-              processedFileID: firstPage.fileID,
-              isProcessing: false,
-              statusText: `拼接完成（${result.pageCount}页）`,
-              processedSize: `${res.width}×${res.height}`,
-              progress: 100
-            })
-
-            // 保存每一页处理结果
-            result.pages.forEach((p, idx) => {
-              app.addProcessedImage({
-                original: 'multi',
-                processed: p.tempFileURL,
-                processedFileID: p.fileID,
-                mode: 'merged-a4',
-                metadata: { width: p.width, height: p.height, pageIndex: idx + 1 },
-                processTime: result.processTime
-              })
-            })
-
-            showSuccess(`拼接完成，共 ${result.pageCount} 页！`)
-          }
-        })
-      } else {
-        // 单张优化结果（兼容旧逻辑）
-        const tempURL = await this.cloudProcessor.getTempFileURL(result.processed)
-        // 二次本地处理：仅进行“背景净化为白”，不锐化、不强对比
-        const localProcessor = new ImageProcessor()
-        // 进度提示（可选）
-        typeof this.setData === 'function' && this.setData({ processingText: '正在进行白底净化...' })
-        try {
-          // 仅生成标准版白底图（单张结果）
-          const stdPath = await localProcessor.processImage(tempURL, 'whiten', (p) => {
-            typeof this.setData === 'function' && this.setData({ progress: Math.min(95, Math.max(0, Math.round(p))) })
-          })
-          
-          // 若为横图则旋转为竖向
-          const rotatedPath = await this.rotateIfLandscape(stdPath)
-
-          wx.getImageInfo({
-            src: rotatedPath,
-            success: (res) => {
-              const processedSizeKB = Math.round((result.processedSize || 0) / 1024)
-              this.setData({
-                processedImage: rotatedPath,
-                processedFileID: result.processed,
-                isProcessing: false,
-                statusText: '优化完成',
-                processedSize: `${res.width}×${res.height} ${processedSizeKB}KB`,
-                progress: 100
-              })
-              // 只注入一张结果到全局
-              app.addProcessedImage({
-                original: this.data.currentImage.path,
-                processed: rotatedPath,
-                processedFileID: result.processed,
-                mode: 'whiten',
-                metadata: result.metadata,
-                processTime: result.processTime
-              })
-              showSuccess('图片优化完成')
-            }
-          })
-        } catch (e) {
-          // 若本地二次处理失败，回退使用云端 tempURL
-          wx.getImageInfo({
-            src: tempURL,
-            success: (res) => {
-              const processedSizeKB = Math.round((result.processedSize || 0) / 1024)
-              this.setData({
-                processedImage: tempURL,
-                processedFileID: result.processed,
-                isProcessing: false,
-                statusText: '优化完成',
-                processedSize: `${res.width}×${res.height} ${processedSizeKB}KB`,
-                progress: 100
-              })
-              app.addProcessedImage({
-                original: this.data.currentImage.path,
-                processed: tempURL,
-                processedFileID: result.processed,
-                mode: 'scanned',
-                metadata: result.metadata,
-                processTime: result.processTime
-              })
-              showSuccess('图片优化完成！')
-            }
-          })
-        }
-      }
+      // 单张处理逻辑
+      await this.processSingleImage(this.data.currentImage.path, (progress, text) => {
+        this.setData({
+          progress: Math.round(progress),
+          processingText: text
+        });
+      });
 
     } catch (error) {
       console.error('图片处理失败:', error)
+      if (app && app.globalData) app.globalData.isBatchProcessing = false;
       this.setData({
         isProcessing: false,
         statusText: '处理失败'
@@ -324,12 +244,14 @@ Page({
 
   // 重新处理
   reprocess() {
+    const app = getApp();
+    app.clearProcessedImages();
     this.setData({
       processedImage: null,
       processedFileID: null,
       progress: 0,
       statusText: '准备优化'
-    })
+    });
   },
 
   // 处理下一张
@@ -358,6 +280,7 @@ Page({
       this.setData({
         currentIndex: idx,
         currentImage: images[idx],
+        hasSelected: true,
         processedImage: null,
         processedFileID: null,
         progress: 0,
@@ -369,16 +292,18 @@ Page({
     }
   },
 
-  // 查看结果（跳转结果页）
+  // 查看结果（跳转结果页）—处理中或批量锁定时禁止跳转
   viewResult() {
+    const app = getApp()
+    if (this.data.isProcessing || (app && app.globalData && app.globalData.isBatchProcessing)) {
+      showError('正在处理，请稍候完成后再查看结果')
+      return
+    }
     if (!this.data.processedImage) {
       showError('请先完成图片处理')
       return
     }
-
-    wx.navigateTo({
-      url: '/pages/result/result'
-    })
+    wx.navigateTo({ url: '/pages/result/result' })
   },
 
   // 点击放大预览优化后图片
@@ -404,25 +329,109 @@ Page({
     console.log('原图加载完成', e.detail)
   },
 
-  // 处理后图片加载完成
+  // 手动左/右旋原图（仅记录角度并透传到云端，不做自动旋转）
+  rotateLeft() {
+    const deg = (this.data.rotationDeg - 90 + 360) % 360
+    this.setData({ rotationDeg: deg })
+  },
+  rotateRight() {
+    const deg = (this.data.rotationDeg + 90) % 360
+    this.setData({ rotationDeg: deg })
+  },
+
+  // 处理后图片加载完成（不做自动旋转，保持用户手动控制）
   onProcessedImageLoad(e) {
     console.log('处理后图片加载完成', e.detail)
   },
 
-  // 如为横图则旋转为竖向
-  async rotateIfLandscape(path) {
+  // 单张图片处理的核心逻辑
+  async processSingleImage(imagePath, progressCallback) {
+    const app = getApp();
+    try {
+      const result = await this.cloudProcessor.processImage(
+        imagePath,
+        { rotate: this.data.rotationDeg }, // 透传手动旋转角度到云端
+        progressCallback
+      );
+
+      if (!result.success) {
+        throw new Error('处理失败');
+      }
+
+      const tempURL = result.processedUrl || await this.cloudProcessor.getTempFileURL(result.processed);
+      if (!tempURL) {
+        throw new Error('云端未返回有效的图片数据');
+      }
+
+      // 使用 wx.getImageInfo 获取 base64 图片信息
+      return new Promise((resolve, reject) => {
+        wx.getImageInfo({
+          src: tempURL,
+          success: (res) => {
+            const processedSizeKB = Math.round((result.processedSize || 0) / 1024);
+            const batchMode = !!this.__batchMode;
+            this.setData({
+              processedImage: tempURL,
+              processedFileID: result.processed,
+              isProcessing: batchMode ? true : false,
+              statusText: batchMode ? '正在处理' : '优化完成',
+              processedSize: `${res.width}×${res.height} ${processedSizeKB}KB`,
+              progress: batchMode ? this.data.progress : 100
+            });
+
+            app.addProcessedImage({
+              original: imagePath,
+              processed: tempURL,
+              processedFileID: result.processed,
+              mode: 'scanned',
+              metadata: result.metadata,
+              processTime: result.processTime
+            });
+            if (!this.__batchMode) {
+              showSuccess('图片优化完成！');
+            }
+            resolve();
+          },
+          fail: (err) => {
+            console.error('加载 base64 图片信息失败', err);
+            reject(new Error('无法解析云端返回的图片'));
+          }
+        });
+      });
+    } catch (error) {
+      console.error('图片处理失败:', error);
+      this.setData({
+        isProcessing: false,
+        statusText: '处理失败'
+      });
+      // 抛出错误，由上层统一处理
+      throw error;
+    }
+  },
+
+  // 将图片旋转到与原图一致的方向（纵向或横向）
+  rotateToMatchOriginal(url, targetPortrait) {
     return new Promise((resolve, reject) => {
       wx.getImageInfo({
-        src: path,
+        src: url,
         success: (info) => {
-          if (info.width <= info.height) return resolve(path)
-          const canvas = wx.createOffscreenCanvas({ type: '2d', width: info.height, height: info.width })
+          const w = info.width, h = info.height
+          const needPortrait = !!targetPortrait
+          const isPortrait = h >= w
+          // 不需要旋转
+          if (needPortrait === isPortrait) {
+            resolve(url)
+            return
+          }
+          // 需要旋转90度
+          const canvas = wx.createOffscreenCanvas({ type: '2d', width: h, height: w })
           const ctx = canvas.getContext('2d')
           const img = canvas.createImage()
           img.onload = () => {
-            ctx.translate(info.height, 0)
+            // 将画布旋转90度并绘制
+            ctx.translate(h, 0)
             ctx.rotate(Math.PI / 2)
-            ctx.drawImage(img, 0, 0, info.width, info.height)
+            ctx.drawImage(img, 0, 0, w, h)
             wx.canvasToTempFilePath({
               canvas,
               success: (res) => resolve(res.tempFilePath),
@@ -430,7 +439,7 @@ Page({
             })
           }
           img.onerror = reject
-          img.src = path
+          img.src = url
         },
         fail: reject
       })

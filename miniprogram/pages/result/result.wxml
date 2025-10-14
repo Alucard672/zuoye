@@ -16,28 +16,8 @@
     <!-- 对比模式 -->
 
 
-    <!-- 优化结果模式 -->
-    <view class="optimized-view" wx:if="{{activeTab === 'optimized'}}">
-      <view class="optimized-image-container" bindtap="previewImage" data-src="{{processedImages[currentImageIndex].processed}}">
-        <image 
-          class="optimized-image" 
-          src="{{processedImages[currentImageIndex].processed}}" 
-          mode="aspectFit"
-          bindtap="previewImage"
-          data-src="{{processedImages[currentImageIndex].processed}}"
-        ></image>
-        <view class="image-info">
-          <view class="info-item">
-            <text class="info-label">优化模式：</text>
-            <text class="info-value">{{getModeText(processedImages[currentImageIndex].mode)}}</text>
-          </view>
-          <view class="info-item">
-            <text class="info-label">处理状态：</text>
-            <text class="info-value success">已完成</text>
-          </view>
-        </view>
-      </view>
-    </view>
+    <!-- 优化结果模式（改为仅缩略图勾选，不展示大图） -->
+    <!-- 已移除大图展示，避免页面过长 -->
 
     <!-- 选择拼接：勾选列表 -->
     <view class="select-section" wx:if="{{processedImages.length > 1}}">
@@ -49,7 +29,7 @@
           <block wx:for="{{processedImages}}" wx:key="processed">
             <view class="select-item">
               <checkbox value="{{index}}" checked="{{selectedMap[index]}}"></checkbox>
-              <image class="select-thumb" src="{{item.processed}}" mode="aspectFill" bindtap="previewImage" data-src="{{item.processed}}"></image>
+              <image class="select-thumb" src="{{item.processed}}" mode="aspectFill" lazy-load="true" bindtap="previewImage" data-src="{{item.processed}}"></image>
             </view>
           </block>
         </view>

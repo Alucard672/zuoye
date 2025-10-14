@@ -115,8 +115,8 @@ App({
     
     // 应用配置
     config: {
-      maxImageSize: 10 * 1024 * 1024, // 10MB
-      maxImageCount: 9, // 最多9张图片
+      maxImageSize: 4 * 1024 * 1024, // 4MB（安卓端稳定性更好）
+      maxImageCount: 5, // 最多5张图片（降低并发处理压力）
       supportFormats: ['jpg', 'jpeg', 'png', 'webp'],
       processTimeout: 60000, // 60秒超时（云函数处理时间较长）
       
@@ -184,6 +184,7 @@ App({
   // 重置处理结果
   clearProcessedImages() {
     this.globalData.processedImages = []
+    console.log('全局处理结果已清空');
   },
 
   // 添加处理结果

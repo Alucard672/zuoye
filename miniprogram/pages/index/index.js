@@ -2,7 +2,8 @@
 Page({
   data: {
     showGuide: false,
-    selectedImages: []
+    selectedImages: [],
+    processingLock: false
   },
 
   onLoad() {
@@ -17,13 +18,24 @@ Page({
   },
 
   onShow() {
-    // 页面显示时的逻辑
+    // 同步全局批量处理状态，防止处理中误操作
+    const app = getApp()
+    const locked = !!(app && app.globalData && app.globalData.isBatchProcessing)
+    this.setData({ processingLock: locked })
+    if (locked) {
+      wx.showToast({ title: '正在批量处理，请稍候', icon: 'none' })
+    }
   },
 
   // 从聊天记录选择图片
   chooseFromChat() {
+    const app = getApp()
+    if (app && app.globalData && app.globalData.isBatchProcessing) {
+      wx.showToast({ title: '正在批量处理，请稍候', icon: 'none' })
+      return
+    }
     wx.chooseMessageFile({
-      count: 9,
+      count: 5,
       type: 'image',
       success: (res) => {
         this.handleSelectedImages(res.tempFiles)
@@ -40,16 +52,22 @@ Page({
 
   // 从相册选择图片
   chooseFromAlbum() {
+    const app = getApp()
+    if (app && app.globalData && app.globalData.isBatchProcessing) {
+      wx.showToast({ title: '正在批量处理，请稍候', icon: 'none' })
+      return
+    }
     wx.chooseImage({
-      count: 9,
+      count: 5,
       sizeType: ['original'],
       sourceType: ['album'],
       success: (res) => {
-        const tempFiles = res.tempFilePaths.map((path, index) => ({
-          path: path,
-          size: 0, // 需要获取实际大小
-          name: `image_${index + 1}.jpg`
-        }))
+        // 使用 res.tempFiles 直接获取真实大小与路径
+        const tempFiles = (res.tempFiles || []).map((f, index) => ({
+          path: f.path || f.tempFilePath || res.tempFilePaths?.[index],
+          size: f.size || 0,
+          name: f.name || `image_${index + 1}.jpg`
+        })).filter(it => !!it.path)
         this.handleSelectedImages(tempFiles)
       },
       fail: (err) => {
@@ -62,64 +80,104 @@ Page({
     })
   },
 
-  // 处理选中的图片
-  handleSelectedImages(files) {
-    if (!files || files.length === 0) {
-      return
-    }
+  // 处理选中的图片（含自动压缩）
+  async handleSelectedImages(files) {
+    if (!files || files.length === 0) return
 
-    // 检查文件大小和格式
-    const validFiles = []
-    const maxSize = getApp().globalData.config.maxImageSize
-    const supportFormats = getApp().globalData.config.supportFormats
+    const app = getApp()
+    const maxSize = app.globalData.config.maxImageSize
+    const supportFormats = app.globalData.config.supportFormats
+    const fsm = wx.getFileSystemManager()
 
-    for (let file of files) {
-      // 检查文件大小
-      if (file.size && file.size > maxSize) {
-        wx.showToast({
-          title: '图片过大，请选择小于10MB的图片',
-          icon: 'none'
-        })
-        continue
-      }
+    const toKB = (bytes) => Math.round((bytes || 0) / 1024)
 
-      // 检查文件格式
-      const fileName = file.name || file.path
-      const fileExt = fileName.split('.').pop().toLowerCase()
-      if (!supportFormats.includes(fileExt)) {
-        wx.showToast({
-          title: '不支持的图片格式',
-          icon: 'none'
-        })
-        continue
-      }
-
-      validFiles.push(file)
-    }
-
-    if (validFiles.length === 0) {
-      wx.showToast({
-        title: '没有有效的图片文件',
-        icon: 'none'
+    // 辅助：获取图片尺寸
+    const getInfo = (src) => new Promise((resolve) => {
+      wx.getImageInfo({
+        src,
+        success: (info) => resolve(info),
+        fail: () => resolve({ width: 0, height: 0, type: 'unknown' })
       })
-      return
-    }
-
-    // 保存选中的图片到全局数据
-    this.setData({
-      selectedImages: validFiles
     })
 
-    // 跳转到处理页面
+    // 辅助：获取文件大小
+    const getSize = (src) => new Promise((resolve) => {
+      try {
+        fsm.stat({
+          path: src,
+          success: (st) => resolve(st.size || 0),
+          fail: () => resolve(0)
+        })
+      } catch (e) {
+        resolve(0)
+      }
+    })
+
+    // 自动压缩（quality=80）
+    const compress = (src) => new Promise((resolve) => {
+      wx.compressImage({
+        src,
+        quality: 80,
+        success: (res) => resolve(res.tempFilePath || res.path || src),
+        fail: () => resolve(src)
+      })
+    })
+
+    const processed = []
+    for (let i = 0; i < files.length && processed.length < app.globalData.config.maxImageCount; i++) {
+      const file = files[i]
+      const fileName = file.name || file.path
+      const fileExt = (fileName.split('.').pop() || '').toLowerCase()
+
+      // 检查格式
+      if (!supportFormats.includes(fileExt)) {
+        wx.showToast({ title: '不支持的图片格式', icon: 'none' })
+        continue
+      }
+
+      const path = file.path
+      let size = file.size || await getSize(path)
+      const info = await getInfo(path)
+      const needCompress = size > maxSize || info.width > 2000 || info.height > 2000
+
+      let finalPath = path
+      if (needCompress) {
+        const compressedPath = await compress(path)
+        const compressedSize = await getSize(compressedPath)
+        if (compressedSize > 0 && compressedSize <= maxSize) {
+          finalPath = compressedPath
+          size = compressedSize
+        } else {
+          // 压缩依然超限，给出提示
+          wx.showToast({
+            title: `图片过大(${toKB(size)}KB)，请重拍或裁剪后再试`,
+            icon: 'none'
+          })
+          continue
+        }
+      }
+
+      processed.push({
+        path: finalPath,
+        size,
+        name: fileName
+      })
+    }
+
+    if (processed.length === 0) {
+      wx.showToast({ title: '没有有效的图片文件', icon: 'none' })
+      return
+    }
+
+    // 保存选中的图片到页面并跳转
+    this.setData({ selectedImages: processed })
     wx.navigateTo({
       url: '/pages/process/process',
-      success: () => {
-        // 将图片数据传递给处理页面
-        const pages = getCurrentPages()
-        const currentPage = pages[pages.length - 1]
-        currentPage.setData({
-          images: validFiles
-        })
+      success: (res) => {
+        const ec = res && res.eventChannel
+        if (ec && ec.emit) {
+          ec.emit('images', processed)
+        }
       }
     })
   },

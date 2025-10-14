@@ -40,6 +40,9 @@ exports.main = async (event, context) => {
     files.length = MAX_BATCH;
   }
 
+  // 是否将处理结果存入云存储，默认为 true
+  const { saveToCloud = true } = (event && event.options) || {};
+
   // 前端可选参数：ops（逐张操作）、布局与输出模式
   const ops = Array.isArray(event && event.ops) ? event.ops : [];
   // 按需调整：默认采用单张输出，不分页、不拼接
@@ -79,26 +82,48 @@ exports.main = async (event, context) => {
     let uploaded = [];
 
     if (outputMode === 'perImage') {
-      // 逐张上传，便于前端单独选择、高清查看、手动方向调整
+      // 逐张处理：上传或返回base64
       uploaded = [];
       for (let i = 0; i < processed.length; i++) {
         const buf = await processed[i].getBufferAsync(Jimp.MIME_PNG);
-        const now = new Date();
-        const y = now.getFullYear();
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const d = String(now.getDate()).padStart(2, '0');
-        const up = await cloud.uploadFile({
-          cloudPath: `processed/${y}/${m}/${d}/single_${Date.now()}_${i + 1}.png`,
-          fileContent: buf
-        });
-        uploaded.push({
-          fileID: up.fileID,
-          width: processed[i].bitmap.width,
-          height: processed[i].bitmap.height,
-          size: buf.length,
-          type: 'single',
-          srcIndex: i
-        });
+        let item;
+        if (saveToCloud) {
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const d = String(now.getDate()).padStart(2, '0');
+          const up = await cloud.uploadFile({
+            cloudPath: `processed/${y}/${m}/${d}/single_${Date.now()}_${i + 1}.png`,
+            fileContent: buf
+          });
+          item = {
+            fileID: up.fileID,
+            width: processed[i].bitmap.width,
+            height: processed[i].bitmap.height,
+            size: buf.length,
+            type: 'single',
+            srcIndex: i
+          };
+        } else {
+          // 统一上传到云存储，避免返回大体积 base64
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const d = String(now.getDate()).padStart(2, '0');
+          const up = await cloud.uploadFile({
+            cloudPath: `processed/${y}/${m}/${d}/single_${Date.now()}_${i + 1}.png`,
+            fileContent: buf
+          });
+          item = {
+            fileID: up.fileID,
+            width: processed[i].bitmap.width,
+            height: processed[i].bitmap.height,
+            size: buf.length,
+            type: 'single',
+            srcIndex: i
+          };
+        }
+        uploaded.push(item);
       }
     } else {
       // 拼接为自定义尺寸（默认A4）并自动分页
@@ -107,37 +132,88 @@ exports.main = async (event, context) => {
       uploaded = [];
       for (let i = 0; i < pagesOut.length; i++) {
         const buf = await pagesOut[i].getBufferAsync(Jimp.MIME_PNG);
-        const now = new Date();
-        const y = now.getFullYear();
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const d = String(now.getDate()).padStart(2, '0');
-        const up = await cloud.uploadFile({
-          cloudPath: `processed/${y}/${m}/${d}/merged_${Date.now()}_${i + 1}.png`,
-          fileContent: buf
-        });
-        uploaded.push({
-          fileID: up.fileID,
-          width: pagesOut[i].bitmap.width,
-          height: pagesOut[i].bitmap.height,
-          size: buf.length,
-          type: 'page',
-          pageIndex: i
-        });
+        let item;
+        if (saveToCloud) {
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const d = String(now.getDate()).padStart(2, '0');
+          const up = await cloud.uploadFile({
+            cloudPath: `processed/${y}/${m}/${d}/merged_${Date.now()}_${i + 1}.png`,
+            fileContent: buf
+          });
+          item = {
+            fileID: up.fileID,
+            width: pagesOut[i].bitmap.width,
+            height: pagesOut[i].bitmap.height,
+            size: buf.length,
+            type: 'page',
+            pageIndex: i
+          };
+        } else {
+          // 统一上传到云存储，避免返回大体积 base64
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const d = String(now.getDate()).padStart(2, '0');
+          const up = await cloud.uploadFile({
+            cloudPath: `processed/${y}/${m}/${d}/merged_${Date.now()}_${i + 1}.png`,
+            fileContent: buf
+          });
+          item = {
+            fileID: up.fileID,
+            width: pagesOut[i].bitmap.width,
+            height: pagesOut[i].bitmap.height,
+            size: buf.length,
+            type: 'page',
+            pageIndex: i
+          };
+        }
+        uploaded.push(item);
       }
     }
 
-    // 统一返回结构：兼容单页与多项
-    const singleFid = uploaded.length === 1 ? uploaded[0].fileID : undefined;
+    // 统一返回结构（精简，避免返回大体积 base64）
+    const singleItem = uploaded.length === 1 ? uploaded[0] : {};
+    const singleFid = singleItem.fileID;
+
+    // 单张时返回最小必要信息
+    if (uploaded.length === 1) {
+      return {
+        success: true,
+        data: {
+          fileID: singleItem.fileID,
+          processedFileID: singleItem.fileID,
+          width: singleItem.width,
+          height: singleItem.height,
+          processTime: Date.now() - t0,
+          perImageCount: processed.length,
+          mode: outputMode
+        }
+      };
+    }
+
+    // 多项时返回精简字段（不包含 base64）
+    const safeItems = uploaded.map(it => ({
+      fileID: it.fileID,
+      width: it.width,
+      height: it.height,
+      size: it.size,
+      type: it.type,
+      pageIndex: it.pageIndex,
+      srcIndex: it.srcIndex
+    }));
+
     return {
       success: true,
       data: {
-        items: uploaded, // 兼容 perImage 或 pages
-        pages: outputMode === 'pages' ? uploaded : [],
-        pageCount: outputMode === 'pages' ? uploaded.length : 0,
+        items: safeItems,
+        pages: outputMode === 'pages' ? safeItems : [],
+        pageCount: outputMode === 'pages' ? safeItems.length : 0,
         processTime: Date.now() - t0,
         perImageCount: processed.length,
-        processedFileID: singleFid,
-        fileID: singleFid,
+        processedFileID: uploaded[0] && uploaded[0].fileID,
+        fileID: uploaded[0] && uploaded[0].fileID,
         mode: outputMode
       }
     };
