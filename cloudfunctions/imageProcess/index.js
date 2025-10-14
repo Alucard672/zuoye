@@ -231,6 +231,13 @@ exports.main = async (event, context) => {
 async function processSingle(buffer, options) {
   let img = await Jimp.read(buffer);
 
+  // 先应用前端手动旋转角度（兼容 rotateDeg 与 rotate）
+  if (options && (options.rotateDeg != null || options.rotate != null)) {
+    const rot = options.rotateDeg != null ? options.rotateDeg : options.rotate;
+    const deg = ((rot % 360) + 360) % 360;
+    img = img.rotate(deg);
+  }
+
   // 保持原尺寸；仅在超大图时做适度下采样以控内存
   if (img.bitmap.width > 2000) {
     img = img.resize(1600, Jimp.AUTO);
@@ -436,8 +443,9 @@ function ensureUprightByText(img) {
 // 前端手动操作应用：旋转/翻转
 function applyOps(img, op = {}) {
   let out = img;
-  if (op.rotateDeg) {
-    const deg = ((op.rotateDeg % 360) + 360) % 360;
+  const rot = (op.rotateDeg != null) ? op.rotateDeg : op.rotate;
+  if (rot != null) {
+    const deg = ((rot % 360) + 360) % 360;
     out = out.rotate(deg);
   }
   if (op.flipH) out = out.flip(true, false);

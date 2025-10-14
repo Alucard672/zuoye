@@ -159,9 +159,10 @@ class CloudImageProcessor {
         data: {
           imageUrl: fileID,
           options: {
-            version: 'v2'
+            version: 'v2',
+            rotateDeg: options.rotateDeg // 透传前端旋转角度到云端
           },
-          // 传递 ops
+          // 传递 ops（保留兼容）
           ops: options.ops || []
         }
       });

@@ -22,6 +22,7 @@ Page({
     networkStatus: null,
     estimatedTime: 0,
     rotationDeg: 0,
+    rotationMap: {},
     hasSelected: false
   },
 
@@ -175,10 +176,14 @@ Page({
         const total = imgs.length;
         for (let i = 0; i < total; i++) {
           const img = imgs[i];
+          // 恢复本张图的用户角度（不做任何自动旋转）
+          const map = this.data.rotationMap || {};
+          const deg = map[i] != null ? map[i] : 0;
           this.setData({
             processingText: `正在处理第 ${i + 1}/${total} 张...`,
             currentIndex: i,
-            currentImage: img // 更新当前处理的图片
+            currentImage: img, // 更新当前处理的图片
+            rotationDeg: deg
           });
           await this.processSingleImage(img.path, (p, text) => {
             const overall = Math.round(((i + p / 100) / total) * 100);
@@ -256,16 +261,19 @@ Page({
 
   // 处理下一张
   processNext() {
-    const { images, currentIndex } = this.data
+    const { images, currentIndex, rotationMap } = this.data
     if (currentIndex + 1 < images.length) {
+      const nextIdx = currentIndex + 1
+      const nextDeg = (rotationMap && rotationMap[nextIdx] != null) ? rotationMap[nextIdx] : 0
       this.setData({
-        currentIndex: currentIndex + 1,
-        currentImage: images[currentIndex + 1],
+        currentIndex: nextIdx,
+        currentImage: images[nextIdx],
+        rotationDeg: nextDeg,
         processedImage: null,
         processedFileID: null,
         progress: 0,
         statusText: '准备优化',
-        hasMoreImages: currentIndex + 2 < images.length
+        hasMoreImages: nextIdx + 1 < images.length
       })
       this.updateImageInfo()
       this.checkNetworkAndEstimate()
@@ -275,11 +283,13 @@ Page({
   // 缩略图点击切换当前预览
   onThumbTap(e) {
     const idx = e.currentTarget.dataset.index
-    const { images } = this.data
+    const { images, rotationMap } = this.data
     if (typeof idx === 'number' && images && images[idx]) {
+      const deg = (rotationMap && rotationMap[idx] != null) ? rotationMap[idx] : 0
       this.setData({
         currentIndex: idx,
         currentImage: images[idx],
+        rotationDeg: deg,
         hasSelected: true,
         processedImage: null,
         processedFileID: null,
@@ -332,11 +342,17 @@ Page({
   // 手动左/右旋原图（仅记录角度并透传到云端，不做自动旋转）
   rotateLeft() {
     const deg = (this.data.rotationDeg - 90 + 360) % 360
-    this.setData({ rotationDeg: deg })
+    const idx = this.data.currentIndex
+    const map = { ...(this.data.rotationMap || {}) }
+    map[idx] = deg
+    this.setData({ rotationDeg: deg, rotationMap: map })
   },
   rotateRight() {
     const deg = (this.data.rotationDeg + 90) % 360
-    this.setData({ rotationDeg: deg })
+    const idx = this.data.currentIndex
+    const map = { ...(this.data.rotationMap || {}) }
+    map[idx] = deg
+    this.setData({ rotationDeg: deg, rotationMap: map })
   },
 
   // 处理后图片加载完成（不做自动旋转，保持用户手动控制）
@@ -348,9 +364,17 @@ Page({
   async processSingleImage(imagePath, progressCallback) {
     const app = getApp();
     try {
+      // 每张图独立角度：优先按索引取，若未设置则用当前 rotationDeg
+      const idx = this.data.currentIndex
+      const map = this.data.rotationMap || {}
+      const degToSend = map[idx] != null ? map[idx] : this.data.rotationDeg
+
+      // 将前端预览的顺时针方向映射为云端一致的旋转方向
+      const degToSendMapped = (360 - (degToSend % 360) + 360) % 360;
+
       const result = await this.cloudProcessor.processImage(
         imagePath,
-        { rotate: this.data.rotationDeg }, // 透传手动旋转角度到云端
+        { rotateDeg: degToSendMapped }, // 每张图独立角度（与云端方向一致）
         progressCallback
       );
 
@@ -409,42 +433,7 @@ Page({
     }
   },
 
-  // 将图片旋转到与原图一致的方向（纵向或横向）
-  rotateToMatchOriginal(url, targetPortrait) {
-    return new Promise((resolve, reject) => {
-      wx.getImageInfo({
-        src: url,
-        success: (info) => {
-          const w = info.width, h = info.height
-          const needPortrait = !!targetPortrait
-          const isPortrait = h >= w
-          // 不需要旋转
-          if (needPortrait === isPortrait) {
-            resolve(url)
-            return
-          }
-          // 需要旋转90度
-          const canvas = wx.createOffscreenCanvas({ type: '2d', width: h, height: w })
-          const ctx = canvas.getContext('2d')
-          const img = canvas.createImage()
-          img.onload = () => {
-            // 将画布旋转90度并绘制
-            ctx.translate(h, 0)
-            ctx.rotate(Math.PI / 2)
-            ctx.drawImage(img, 0, 0, w, h)
-            wx.canvasToTempFilePath({
-              canvas,
-              success: (res) => resolve(res.tempFilePath),
-              fail: reject
-            })
-          }
-          img.onerror = reject
-          img.src = url
-        },
-        fail: reject
-      })
-    })
-  },
+
 
   // 页面卸载时清理资源
   onUnload() {

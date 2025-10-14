@@ -117,7 +117,8 @@ App({
     config: {
       maxImageSize: 4 * 1024 * 1024, // 4MB（安卓端稳定性更好）
       maxImageCount: 5, // 最多5张图片（降低并发处理压力）
-      supportFormats: ['jpg', 'jpeg', 'png', 'webp'],
+      // 扩充兼容 HEIC/HEIF（iPhone 常见），后续会在选择阶段做解析容错
+      supportFormats: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'],
       processTimeout: 60000, // 60秒超时（云函数处理时间较长）
       
       // 图像处理参数

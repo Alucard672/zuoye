@@ -129,10 +129,16 @@ Page({
       const fileName = file.name || file.path
       const fileExt = (fileName.split('.').pop() || '').toLowerCase()
 
-      // 检查格式
+      // 检查格式（宽松兼容）：若扩展名不在白名单，尝试用 getImageInfo 能否解析；能解析则继续
       if (!supportFormats.includes(fileExt)) {
-        wx.showToast({ title: '不支持的图片格式', icon: 'none' })
-        continue
+        const infoTry = await getInfo(path)
+        if (!infoTry || !infoTry.width || !infoTry.height) {
+          wx.showToast({ title: '不支持的图片格式', icon: 'none' })
+          continue
+        } else {
+          // 仅提示一次兼容（可选）
+          // wx.showToast({ title: '已兼容非常见格式', icon: 'none', duration: 1200 })
+        }
       }
 
       const path = file.path

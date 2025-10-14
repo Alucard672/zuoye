@@ -443,12 +443,13 @@
 }
 
 .mini-btn {
-  padding: 8rpx 16rpx;
-  font-size: 24rpx;
-  border-radius: 20rpx;
+  padding: 2rpx 10rpx;
+  font-size: 18rpx;
+  border-radius: 12rpx;
   border: 2rpx solid #4A90E2;
   color: #4A90E2;
   background: #FFFFFF;
+  min-width: 120rpx;
 }
 
 /* 处理提示 */

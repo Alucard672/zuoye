@@ -50,8 +50,8 @@
         <view style="display:flex;align-items:center;">
           <text class="image-label">原图</text>
           <view class="rotate-actions">
-            <button class="mini-btn" style="padding: 6rpx 20rpx; font-size: 24rpx;" bindtap="rotateLeft">左旋</button>
-            <button class="mini-btn" style="padding: 6rpx 20rpx; font-size: 24rpx; margin-left: 20rpx;" bindtap="rotateRight">右旋</button>
+            <button class="mini-btn" size="mini" plain bindtap="rotateLeft">左旋</button>
+            <button class="mini-btn" size="mini" plain bindtap="rotateRight">右旋</button>
           </view>
         </view>
         <text class="image-size">{{originalSize}}</text>
