@@ -3,7 +3,8 @@ Page({
   data: {
     showGuide: false,
     selectedImages: [],
-    processingLock: false
+    processingLock: false,
+    version: ''
   },
 
   onLoad() {
@@ -21,10 +22,29 @@ Page({
     // 同步全局批量处理状态，防止处理中误操作
     const app = getApp()
     const locked = !!(app && app.globalData && app.globalData.isBatchProcessing)
-    this.setData({ processingLock: locked })
+    this.setData({ 
+      processingLock: locked,
+      version: (app && app.globalData && app.globalData.version) || '1.4.2'
+    })
     if (locked) {
       wx.showToast({ title: '正在批量处理，请稍候', icon: 'none' })
     }
+  },
+
+  // 删除单张已选图片
+  removeSelected(e) {
+    const idx = e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.index : -1
+    if (idx < 0) return
+    const list = (this.data.selectedImages || []).slice()
+    const removed = list.splice(idx, 1)[0]
+    this.setData({ selectedImages: list })
+    // 如需同步删除云端文件，可在 removed.fileID 存在时调用 wx.cloud.deleteFile
+    // if (removed && removed.fileID) { wx.cloud.deleteFile({ fileList: [removed.fileID] }) }
+  },
+
+  // 清空所有已选
+  clearSelected() {
+    this.setData({ selectedImages: [] })
   },
 
   // 从聊天记录选择图片
@@ -35,7 +55,7 @@ Page({
       return
     }
     wx.chooseMessageFile({
-      count: 5,
+      count: 10,
       type: 'image',
       success: (res) => {
         this.handleSelectedImages(res.tempFiles)
@@ -58,7 +78,7 @@ Page({
       return
     }
     wx.chooseImage({
-      count: 5,
+      count: 10,
       sizeType: ['original'],
       sourceType: ['album'],
       success: (res) => {
@@ -113,12 +133,41 @@ Page({
       }
     })
 
-    // 自动压缩（quality=80）
-    const compress = (src) => new Promise((resolve) => {
+    // 自动压缩（quality阶梯：80 -> 60）
+    const compressOnce = (src, quality = 80) => new Promise((resolve) => {
       wx.compressImage({
         src,
-        quality: 80,
+        quality,
         success: (res) => resolve(res.tempFilePath || res.path || src),
+        fail: () => resolve(src)
+      })
+    })
+    // 尺寸降采样：将长边限制到2048像素后导出
+    const downscaleToMaxEdge = (src, maxEdge = 2048) => new Promise((resolve) => {
+      wx.getImageInfo({
+        src,
+        success: (info) => {
+          let { width, height } = info
+          if (width === 0 || height === 0) { resolve(src); return }
+          const longEdge = Math.max(width, height)
+          if (longEdge <= maxEdge) { resolve(src); return }
+          const scale = maxEdge / longEdge
+          const newW = Math.round(width * scale)
+          const newH = Math.round(height * scale)
+          const canvas = wx.createOffscreenCanvas({ type: '2d', width: newW, height: newH })
+          const ctx = canvas.getContext('2d')
+          const img = canvas.createImage()
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0, newW, newH)
+            wx.canvasToTempFilePath({
+              canvas,
+              success: (res) => resolve(res.tempFilePath || res.path || src),
+              fail: () => resolve(src)
+            })
+          }
+          img.onerror = () => resolve(src)
+          img.src = src
+        },
         fail: () => resolve(src)
       })
     })
@@ -148,18 +197,33 @@ Page({
 
       let finalPath = path
       if (needCompress) {
-        const compressedPath = await compress(path)
-        const compressedSize = await getSize(compressedPath)
-        if (compressedSize > 0 && compressedSize <= maxSize) {
-          finalPath = compressedPath
-          size = compressedSize
+        // 第一次压缩：quality 80
+        const c80 = await compressOnce(path, 80)
+        const c80Size = await getSize(c80)
+        // 第二次压缩：quality 60（若仍超限）
+        const c60 = c80Size > maxSize ? await compressOnce(c80, 60) : c80
+        const c60Size = await getSize(c60)
+        // 尺寸降采样（2048长边）后再压缩60（若仍超限）
+        let cScaled = c60
+        let cScaledSize = c60Size
+        if (c60Size > maxSize || info.width > 3000 || info.height > 3000) {
+          const scaled = await downscaleToMaxEdge(c60, 2048)
+          const scaled60 = await compressOnce(scaled, 60)
+          cScaled = scaled60
+          cScaledSize = await getSize(scaled60)
+        }
+        if (cScaledSize > 0 && cScaledSize <= maxSize) {
+          finalPath = cScaled
+          size = cScaledSize
         } else {
-          // 压缩依然超限，给出提示
+          // 仍超限：允许继续（避免直接丢弃），但提示可能处理较慢
           wx.showToast({
-            title: `图片过大(${toKB(size)}KB)，请重拍或裁剪后再试`,
-            icon: 'none'
+            title: `图片较大(${toKB(cScaledSize || size)}KB)，已尝试压缩后继续处理`,
+            icon: 'none',
+            duration: 1500
           })
-          continue
+          finalPath = cScaled
+          size = cScaledSize || size
         }
       }
 
@@ -177,6 +241,7 @@ Page({
 
     // 保存选中的图片到页面并跳转
     this.setData({ selectedImages: processed })
+    // 直接进入处理页，批量可无需先点单图
     wx.navigateTo({
       url: '/pages/process/process',
       success: (res) => {

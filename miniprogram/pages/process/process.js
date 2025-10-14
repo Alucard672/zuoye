@@ -137,13 +137,10 @@ Page({
   async startProcess() {
     if (this.data.isProcessing) return; // 防止重复点击
 
-    // 若当前未设置图片，提示先选择
-    if (!this.data.currentImage && Array.isArray(this.data.images) && this.data.images.length > 0) {
-      showError('请先在上方选择一张图片');
-      return;
-    }
-
-    if (!this.data.currentImage) {
+    // 批量模式可直接开始，无需先选中某一张
+    const imgs = this.data.images || [];
+    const isBatch = Array.isArray(imgs) && imgs.length > 1;
+    if (!this.data.currentImage && !isBatch) {
       showError('请先选择图片');
       return;
     }
@@ -169,36 +166,11 @@ Page({
     try {
       const imgs = this.data.images || [];
 
-      // 批量处理逻辑
+      // 批量处理逻辑（支持并发，默认每批2张）
       if (imgs.length > 1) {
         app.globalData.isBatchProcessing = true;
         this.__batchMode = true;
-        const total = imgs.length;
-        for (let i = 0; i < total; i++) {
-          const img = imgs[i];
-          // 恢复本张图的用户角度（不做任何自动旋转）
-          const map = this.data.rotationMap || {};
-          const deg = map[i] != null ? map[i] : 0;
-          this.setData({
-            processingText: `正在处理第 ${i + 1}/${total} 张...`,
-            currentIndex: i,
-            currentImage: img, // 更新当前处理的图片
-            rotationDeg: deg
-          });
-          await this.processSingleImage(img.path, (p, text) => {
-            const overall = Math.round(((i + p / 100) / total) * 100);
-            this.setData({
-              progress: overall,
-              processingText: `第 ${i + 1}/${total} 张：${text || ''}`
-            });
-          });
-        }
-        this.setData({
-          isProcessing: false,
-          statusText: '批量处理完成',
-          progress: 100,
-          hasMoreImages: false
-        });
+        await this.processBatchConcurrent(2); // 可将 2 调整为 3 视设备性能
         this.__batchMode = false;
         app.globalData.isBatchProcessing = false;
         showSuccess(`共处理 ${imgs.length} 张`);
@@ -302,6 +274,77 @@ Page({
     }
   },
 
+  // 删除当前列表中的某张图片（处理页支持删除）
+  removeImage(e) {
+    if (this.data.isProcessing) {
+      wx.showToast({ title: '处理中无法删除', icon: 'none' })
+      return
+    }
+    const idx = e && e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.index : -1
+    const images = (this.data.images || []).slice()
+    if (idx < 0 || idx >= images.length) return
+
+    // 删除索引对应的图片
+    const removed = images.splice(idx, 1)[0]
+
+    // 更新 rotationMap：删除该索引并后续索引左移
+    const oldMap = this.data.rotationMap || {}
+    const newMap = {}
+    Object.keys(oldMap).forEach(k => {
+      const key = parseInt(k, 10)
+      if (key < idx) newMap[key] = oldMap[key]
+      else if (key > idx) newMap[key - 1] = oldMap[key]
+    })
+
+    // 更新 currentIndex/currentImage/hasSelected
+    let newIndex = this.data.currentIndex
+    let newCurrent = this.data.currentImage
+    let hasSelected = this.data.hasSelected
+
+    if (images.length === 0) {
+      newIndex = 0
+      newCurrent = null
+      hasSelected = false
+    } else {
+      // 如果删除的是当前选中或当前处理的项，自动切换
+      if (idx === this.data.currentIndex) {
+        // 优先切到同位置的新项，否则前一个
+        newIndex = Math.min(idx, images.length - 1)
+        newCurrent = images[newIndex]
+        hasSelected = true
+      } else {
+        // 若当前索引在删除项之后，索引左移
+        if (this.data.currentIndex > idx) {
+          newIndex = this.data.currentIndex - 1
+        }
+        newCurrent = images[newIndex] || null
+        hasSelected = !!newCurrent
+      }
+    }
+
+    // 恢复该图的旋转角度
+    const nextDeg = newCurrent && newMap[newIndex] != null ? newMap[newIndex] : 0
+
+    this.setData({
+      images,
+      rotationMap: newMap,
+      currentIndex: newIndex,
+      currentImage: newCurrent,
+      rotationDeg: nextDeg,
+      hasSelected: hasSelected,
+      processedImage: null,
+      processedFileID: null,
+      progress: 0,
+      statusText: hasSelected ? '准备优化' : '请选择图片',
+      hasMoreImages: images.length > 1 && newIndex + 1 < images.length
+    })
+
+    if (hasSelected) {
+      this.updateImageInfo()
+      this.checkNetworkAndEstimate()
+    }
+  },
+
   // 查看结果（跳转结果页）—处理中或批量锁定时禁止跳转
   viewResult() {
     const app = getApp()
@@ -358,6 +401,62 @@ Page({
   // 处理后图片加载完成（不做自动旋转，保持用户手动控制）
   onProcessedImageLoad(e) {
     console.log('处理后图片加载完成', e.detail)
+  },
+
+  // 批量并发处理（limit 每批并行数量）
+  async processBatchConcurrent(limit = 2) {
+    const app = getApp();
+    const imgs = this.data.images || [];
+    const total = imgs.length;
+    let completed = 0;
+
+    const runBatch = async (startIdx) => {
+      const tasks = [];
+      for (let k = 0; k < limit; k++) {
+        const i = startIdx + k;
+        if (i >= total) break;
+        const img = imgs[i];
+
+        // 为每个并发任务准备独立的进度更新闭包
+        const progressFn = (p, text) => {
+          // 简化总体进度：按完成数量计算，正在进行的按当前 p 折算
+          const base = Math.floor((completed / total) * 100);
+          const inFlightWeight = Math.round((p / 100) * (1 / total) * 100);
+          const overall = Math.min(100, base + inFlightWeight);
+          this.setData({
+            progress: overall,
+            processingText: `正在处理第 ${i + 1}/${total} 张...`
+          });
+        };
+
+        tasks.push((async () => {
+          // 设定当前处理项的旋转角度，仅用于 UI 提示；真正角度在 processSingleImage 内按索引读取
+          const map = this.data.rotationMap || {};
+          const deg = map[i] != null ? map[i] : 0;
+          this.setData({ currentIndex: i, currentImage: img, rotationDeg: deg });
+          await this.processSingleImage(img.path, progressFn);
+          completed++;
+          // 更新整体进度
+          const overall = Math.round((completed / total) * 100);
+          this.setData({ progress: overall });
+        })());
+      }
+      // 并发执行当前批
+      await Promise.allSettled(tasks);
+    };
+
+    // 逐批推进
+    for (let s = 0; s < total; s += limit) {
+      await runBatch(s);
+    }
+
+    // 收尾
+    this.setData({
+      isProcessing: false,
+      statusText: '批量处理完成',
+      progress: 100,
+      hasMoreImages: false
+    });
   },
 
   // 单张图片处理的核心逻辑

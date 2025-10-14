@@ -202,3 +202,12 @@
     transform: translateY(0);
   }
 }
+
+/* 版本号底部展示 */
+.version-footer {
+  margin-top: 32rpx;
+  padding: 24rpx 0;
+  text-align: center;
+  color: #888888;
+  font-size: 24rpx;
+}

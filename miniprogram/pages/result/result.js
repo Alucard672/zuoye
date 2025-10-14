@@ -10,16 +10,30 @@ Page({
     selectedMap: {},
     selectedCount: 0,
     selectedIndices: [],
-    stitchedPath: ''
+    selectedOrder: [],
+    orderMap: {},
+    stitchedPath: '',
+    version: '',
+    savedList: [] // 保存区列表：[{savedFilePath, name, size, time}]
   },
 
   onLoad() {
     // 获取处理结果数据
     const app = getApp()
     if (app.globalData.processedImages && app.globalData.processedImages.length > 0) {
+      // 读取保存区
+      let saved = []
+      try { saved = wx.getStorageSync('savedStitchResults') || [] } catch(e) { saved = [] }
+      // 填充可读时间
+      const mapped = Array.isArray(saved) ? saved.map(it => ({ ...it, timeText: this._formatTime(it.time), sizeText: this._formatSize(it.size) })) : []
       this.setData({
-        processedImages: app.globalData.processedImages
+        processedImages: app.globalData.processedImages,
+        version: (app.globalData && app.globalData.version) || '1.4.2',
+        savedList: mapped
       })
+      // 进入结果页后确保关闭任何遗留的加载态，并清理批量锁
+      try { wx.hideLoading() } catch(e) {}
+      if (app && app.globalData) app.globalData.isBatchProcessing = false
     } else {
       // 如果没有数据，返回首页
       wx.showToast({
@@ -55,10 +69,22 @@ Page({
     const values = Array.isArray(e?.detail?.value) ? e.detail.value : []
     const map = {}
     values.forEach(v => { map[v] = true })
+    const nums = values.map(v => parseInt(v, 10)).filter(n => !Number.isNaN(n))
+    // 记录“选择顺序”：先维护之前的顺序，移除未勾选的，追加新勾选的（按本次数组顺序）
+    const prev = Array.isArray(this.data.selectedOrder) ? this.data.selectedOrder.slice() : []
+    const setNow = new Set(nums)
+    const kept = prev.filter(i => setNow.has(i))
+    const added = nums.filter(i => !prev.includes(i))
+    const newOrder = kept.concat(added)
+    // 建立索引到序号的映射，便于 WXML 显示
+    const orderMap = {}
+    newOrder.forEach((idx, pos) => { orderMap[idx] = pos + 1 })
     this.setData({
       selectedMap: map,
-      selectedIndices: values.map(v => parseInt(v, 10)).filter(n => !Number.isNaN(n)),
-      selectedCount: values.length
+      selectedIndices: nums,
+      selectedOrder: newOrder,
+      orderMap,
+      selectedCount: nums.length
     })
   },
 
@@ -66,7 +92,8 @@ Page({
   async stitchSelected() {
     const imgs = this.data.processedImages || []
     const indices = this.data.selectedIndices || []
-    const selected = indices
+    const order = (this.data.selectedOrder && this.data.selectedOrder.length > 0) ? this.data.selectedOrder : indices
+    const selected = order
       .filter(i => i >= 0 && i < imgs.length)
       .map(i => imgs[i].processed)
     if (selected.length < 2) {
@@ -77,8 +104,15 @@ Page({
     try {
       const out = await Stitcher.stitchVertical(selected)
       wx.hideLoading()
+      // 先更新状态，等一帧再进行后续操作，避免瞬时峰值
       this.setData({ stitchedPath: out })
-      wx.previewImage({ urls: [out], current: out })
+      wx.nextTick(() => {
+        setTimeout(() => {
+          // 写入保存区（不再预览）
+          const name = `stitched_${Date.now()}.jpg`
+          this._saveToVault(out, name)
+        }, 16)
+      })
     } catch (err) {
       wx.hideLoading()
       wx.showToast({ title: '拼接失败', icon: 'none' })
@@ -127,7 +161,7 @@ Page({
     this._saveUrlToAlbum(url)
   },
 
-  // 保存拼接结果
+  // 保存拼接结果到相册
   saveStitched() {
     const url = this.data.stitchedPath
     if (!url) {
@@ -137,30 +171,48 @@ Page({
     this._saveUrlToAlbum(url)
   },
 
+  // 保存拼接结果到“保存区”（本地持久化）
+  saveStitchedToVault() {
+    const url = this.data.stitchedPath
+    if (!url) {
+      wx.showToast({ title: '暂无拼接结果', icon: 'none' })
+      return
+    }
+    const name = `stitched_${Date.now()}.jpg`
+    this._saveToVault(url, name)
+  },
+
   // 通用保存
   _saveUrlToAlbum(url) {
     wx.showLoading({ title: '保存中...' })
+    const doSave = (filePath) => {
+      wx.saveImageToPhotosAlbum({
+        filePath,
+        success: () => { wx.hideLoading(); wx.showToast({ title: '已保存到相册', icon: 'success' }) },
+        fail: (err) => {
+          wx.hideLoading()
+          if (err.errMsg && err.errMsg.includes('auth')) {
+            wx.showModal({
+              title: '需要授权',
+              content: '需要您授权保存图片到相册',
+              confirmText: '去设置',
+              success: (r) => { if (r.confirm) wx.openSetting() }
+            })
+          } else {
+            wx.showToast({ title: '保存失败', icon: 'none' })
+          }
+        }
+      })
+    }
+    // 本地临时文件可直接保存
+    if (/^wxfile:\/\//.test(url) || /^http:\/\/tmp\//.test(url)) {
+      doSave(url)
+      return
+    }
+    // 远程或云文件，先下载再保存
     wx.downloadFile({
       url,
-      success: (res) => {
-        wx.saveImageToPhotosAlbum({
-          filePath: res.tempFilePath,
-          success: () => { wx.hideLoading(); wx.showToast({ title: '已保存到相册', icon: 'success' }) },
-          fail: (err) => {
-            wx.hideLoading()
-            if (err.errMsg && err.errMsg.includes('auth')) {
-              wx.showModal({
-                title: '需要授权',
-                content: '需要您授权保存图片到相册',
-                confirmText: '去设置',
-                success: (r) => { if (r.confirm) wx.openSetting() }
-              })
-            } else {
-              wx.showToast({ title: '保存失败', icon: 'none' })
-            }
-          }
-        })
-      },
+      success: (res) => doSave(res.tempFilePath),
       fail: () => { wx.hideLoading(); wx.showToast({ title: '下载失败', icon: 'none' }) }
     })
   },
@@ -252,6 +304,121 @@ Page({
         fail: reject
       })
     })
+  },
+
+  // 保存到“保存区”（内部实现）
+  _saveToVault(url, name) {
+    const fs = wx.getFileSystemManager()
+    const persist = (tempPath) => {
+      fs.saveFile({
+        tempFilePath: tempPath,
+        success: (r) => {
+          // 获取大小
+          let size = 0
+          try { size = fs.statSync(r.savedFilePath).size || 0 } catch(e) {}
+          const now = Date.now()
+          const item = { savedFilePath: r.savedFilePath, name: name || 'stitched.jpg', size, time: now, timeText: this._formatTime(now), sizeText: this._formatSize(size) }
+          const list = (this.data.savedList || []).slice()
+          list.unshift(item)
+          // 超过10条则移除最早的（并尝试删除文件，避免空间占用）
+          while (list.length > 10) {
+            const removed = list.pop()
+            try { if (removed && removed.savedFilePath) wx.getFileSystemManager().unlinkSync(removed.savedFilePath) } catch (e) {}
+          }
+          this.setData({ savedList: list })
+          try { wx.setStorageSync('savedStitchResults', list) } catch(e) {}
+          wx.showToast({ title: '已保存到保存区', icon: 'success' })
+        },
+        fail: () => wx.showToast({ title: '保存失败', icon: 'none' })
+      })
+    }
+    if (/^wxfile:\/\//.test(url) || /^http:\/\/tmp\//.test(url)) {
+      persist(url)
+    } else {
+      wx.downloadFile({
+        url,
+        success: (res) => persist(res.tempFilePath),
+        fail: () => wx.showToast({ title: '下载失败', icon: 'none' })
+      })
+    }
+  },
+
+  // 预览保存区图片
+  openSaved(e) {
+    const path = e.currentTarget.dataset.path
+    if (!path) return
+    wx.previewImage({ urls: [path], current: path })
+  },
+
+  // 保存区图片保存到相册
+  saveSavedToAlbum(e) {
+    const path = e.currentTarget.dataset.path
+    if (!path) return
+    this._saveUrlToAlbum(path)
+  },
+
+  // 转发保存区图片（取消或失败时不做任何预览）
+  forwardSaved(e) {
+    const path = e.currentTarget.dataset.path
+    if (!path) return
+    if (wx.showShareImageMenu) {
+      wx.showShareImageMenu({
+        path,
+        success: () => {},
+        fail: () => {},      // 不预览
+        complete: () => {}   // 不预览
+      })
+    } else {
+      // 低版本：仅提示，不预览
+      wx.showToast({ title: '请使用右上角进行转发', icon: 'none' })
+    }
+  },
+
+  // 删除保存区图片（当前未在UI暴露，保留以备后用）
+  removeSaved(e) {
+    const path = e.currentTarget.dataset.path
+    if (!path) return
+    const fs = wx.getFileSystemManager()
+    try { fs.unlinkSync(path) } catch(e) {}
+    const list = (this.data.savedList || []).filter(i => i.savedFilePath !== path)
+    this.setData({ savedList: list })
+    try { wx.setStorageSync('savedStitchResults', list) } catch(e) {}
+    wx.showToast({ title: '已删除', icon: 'success' })
+  },
+
+  // 清空保存区
+  clearVault() {
+    const list = this.data.savedList || []
+    const fs = wx.getFileSystemManager()
+    for (const it of list) {
+      try { if (it && it.savedFilePath) fs.unlinkSync(it.savedFilePath) } catch (e) {}
+    }
+    this.setData({ savedList: [] })
+    try { wx.setStorageSync('savedStitchResults', []) } catch (e) {}
+    wx.showToast({ title: '已清空', icon: 'success' })
+  },
+
+  // 时间格式化
+  _formatTime(ts) {
+    try {
+      const d = new Date(ts)
+      const pad = (n) => (n < 10 ? '0' + n : '' + n)
+      const y = d.getFullYear()
+      const m = pad(d.getMonth() + 1)
+      const day = pad(d.getDate())
+      const hh = pad(d.getHours())
+      const mm = pad(d.getMinutes())
+      return `${y}-${m}-${day} ${hh}:${mm}`
+    } catch (e) {
+      return '' + ts
+    }
+  },
+
+  // 大小格式化
+  _formatSize(bytes) {
+    const n = Number(bytes) || 0
+    if (n >= 1024 * 1024) return Math.round(n / 1024 / 1024) + ' MB'
+    return Math.max(1, Math.round(n / 1024)) + ' KB'
   },
 
   // 分享到微信

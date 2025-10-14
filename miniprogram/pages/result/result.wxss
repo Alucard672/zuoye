@@ -196,6 +196,34 @@
   flex-direction: column;
   align-items: center;
   gap: 8rpx;
+  position: relative; /* 使序号徽标/勾选框可绝对定位 */
+}
+
+.checkbox-badge {
+  position: absolute;
+  top: -8rpx;
+  right: -8rpx;
+  z-index: 3;
+}
+
+.order-badge {
+  position: absolute;
+  /* 居中到缩略图中间 */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 56rpx;
+  height: 56rpx;
+  padding: 0 12rpx;
+  border-radius: 28rpx;
+  background: rgba(74, 144, 226, 0.92);
+  color: #FFFFFF;
+  font-size: 32rpx;
+  font-weight: 600;
+  line-height: 56rpx;
+  text-align: center;
+  box-shadow: 0 6rpx 16rpx rgba(74, 144, 226, 0.25);
+  z-index: 5;
 }
 
 .select-thumb {
@@ -450,4 +478,118 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* 版本号底部展示 */
+.version-footer {
+  margin-top: 24rpx;
+  padding: 24rpx 0;
+  text-align: center;
+  color: #888888;
+  font-size: 24rpx;
+}
+
+/* 保存区 */
+.vault-section {
+  background: #FFFFFF;
+  border-radius: 32rpx;
+  padding: 24rpx;
+  margin: 16rpx 0 24rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.06);
+}
+
+.vault-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 16rpx;
+}
+
+.vault-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.vault-sub {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.vault-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.vault-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.vault-thumb {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 12rpx;
+  border: 2rpx solid #E5E5E5;
+  background: #F8F9FB;
+  flex-shrink: 0;
+}
+
+.vault-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.vault-name {
+  font-size: 28rpx;
+  color: #333;
+}
+
+.vault-time,
+.vault-size {
+  font-size: 24rpx;
+  color: #888;
+}
+.vault-time {
+  font-weight: 600; /* 日期加粗 */
+}
+
+.vault-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.btn.mini {
+  min-width: 140rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+  background: transparent;
+  border: 2rpx solid #E5E5E5;
+  color: #666;
+}
+
+.btn.mini.save {
+  border-color: #4A90E2;
+  color: #4A90E2;
+}
+
+.btn.mini.forward {
+  border-color: #52C41A;
+  color: #52C41A;
+}
+
+.btn.mini.clear {
+  border-color: #ff7a45;
+  color: #ff7a45;
+}
+
+.btn.mini.danger {
+  border-color: #ff4d4f;
+  color: #ff4d4f;
 }

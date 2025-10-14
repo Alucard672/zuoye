@@ -108,15 +108,15 @@ App({
   globalData: {
     userInfo: null,
     scene: 0,
-    version: '1.0.0',
+    version: '2.0.0',
     
     // 云开发环境ID
     cloudEnv: 'bbs-4g91m08ha404f7d0',
     
     // 应用配置
     config: {
-      maxImageSize: 4 * 1024 * 1024, // 4MB（安卓端稳定性更好）
-      maxImageCount: 5, // 最多5张图片（降低并发处理压力）
+      maxImageSize: 10 * 1024 * 1024, // 10MB（与组件默认一致，减少被前端过滤）
+      maxImageCount: 10, // 最多10张图片
       // 扩充兼容 HEIC/HEIF（iPhone 常见），后续会在选择阶段做解析容错
       supportFormats: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'],
       processTimeout: 60000, // 60秒超时（云函数处理时间较长）

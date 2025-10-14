@@ -23,48 +23,65 @@
     <view class="select-section" wx:if="{{processedImages.length > 1}}">
       <view class="select-header">
         <text>选择需要拼接的图片（已选 {{selectedCount}} 张）</text>
+        <text style="display:block;color:#888;font-size:24rpx;margin-top:8rpx;">提示：将按选择顺序进行拼接（先选先排）。</text>
       </view>
       <checkbox-group bindchange="onSelectChange">
         <view class="select-list">
           <block wx:for="{{processedImages}}" wx:key="processed">
             <view class="select-item">
-              <checkbox value="{{index}}" checked="{{selectedMap[index]}}"></checkbox>
+              <!-- 勾选框放到缩略图右上角 -->
+              <view class="checkbox-badge">
+                <checkbox value="{{index}}" checked="{{selectedMap[index]}}"></checkbox>
+              </view>
+              <!-- 选择序号徽标（按选择顺序显示 1、2、3…） -->
+              <view class="order-badge" wx:if="{{orderMap[index]}}">{{orderMap[index]}}</view>
               <image class="select-thumb" src="{{item.processed}}" mode="aspectFill" lazy-load="true" bindtap="previewImage" data-src="{{item.processed}}"></image>
             </view>
           </block>
         </view>
       </checkbox-group>
       <button class="btn btn-primary" bindtap="stitchSelected">拼接所选</button>
-      <button class="btn btn-outline" wx:if="{{stitchedPath}}" bindtap="saveStitched" style="margin-top:16rpx;">保存拼接结果</button>
+      <button class="btn btn-outline" wx:if="{{stitchedPath}}" bindtap="saveStitched" style="margin-top:16rpx;">保存到相册</button>
     </view>
 
     <!-- 多图切换 -->
 
   </view>
 
-  <!-- 操作按钮区域 -->
-  <view class="action-section">
-    <view class="primary-actions">
-
-      
-      <button class="btn btn-accent" bindtap="saveToAlbum">
-        <image src="../../images/save-icon.png" class="btn-icon"></image>
-        <text>保存到相册</text>
-      </button>
+  <!-- 保存区（始终显示） -->
+  <view class="vault-section">
+    <view class="vault-header">
+      <text class="vault-title">保存区</text>
+      <view style="display:flex; align-items:center; gap:16rpx;">
+        <text class="vault-sub">已保存 {{savedList.length}} 个拼接结果</text>
+        <button wx:if="{{savedList.length}}" class="btn mini clear" size="mini" bindtap="clearVault">清空</button>
+      </view>
     </view>
 
-    <view class="secondary-actions">
-      <button class="btn btn-outline" bindtap="shareToWechat">
-        <image src="../../images/wechat-icon.png" class="btn-icon"></image>
-        <text>分享到微信</text>
-      </button>
-      
-      <button class="btn btn-outline" bindtap="printImage">
-        <image src="../../images/print-icon.png" class="btn-icon"></image>
-        <text>连接打印机</text>
-      </button>
+    <!-- 空状态 -->
+    <view wx:if="{{!savedList.length}}" style="padding: 16rpx 8rpx; color:#999; font-size:24rpx;">
+      暂无保存内容，请先拼接并点击“保存到保存区”
+    </view>
+
+    <view class="vault-list" wx:if="{{savedList.length}}">
+      <block wx:for="{{savedList}}" wx:key="savedFilePath">
+        <view class="vault-item">
+          <image class="vault-thumb" src="{{item.savedFilePath}}" mode="aspectFill" bindtap="openSaved" data-path="{{item.savedFilePath}}"></image>
+          <view class="vault-meta">
+            <text class="vault-name">{{item.name}}</text>
+            <text class="vault-time">{{item.timeText}}</text>
+            <text class="vault-size">{{item.sizeText}}</text>
+          </view>
+          <view class="vault-actions">
+            <button class="btn mini save" size="mini" bindtap="saveSavedToAlbum" data-path="{{item.savedFilePath}}">存相册</button>
+            <button class="btn mini forward" size="mini" bindtap="forwardSaved" data-path="{{item.savedFilePath}}">转发</button>
+          </view>
+        </view>
+      </block>
     </view>
   </view>
+
+
 
   <!-- 满意度评价 -->
   <view class="feedback-section">
@@ -104,6 +121,11 @@
       <text class="tip-item">• 选择"高质量"打印模式</text>
       <text class="tip-item">• 使用80g以上的纸张</text>
     </view>
+  </view>
+
+  <!-- 版本号 -->
+  <view class="version-footer">
+    <text>版本 v{{version || '1.4.2'}}</text>
   </view>
 </view>
 

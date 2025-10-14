@@ -20,6 +20,8 @@
       <block wx:for="{{images}}" wx:key="path">
         <view class="thumb-item {{index === currentIndex ? 'active' : ''}}" data-index="{{index}}" bindtap="onThumbTap">
           <image class="thumb-image" src="{{item.path}}" mode="aspectFill"></image>
+          <!-- 删除按钮（防冒泡） -->
+          <view class="thumb-delete" data-index="{{index}}" catchtap="removeImage">×</view>
         </view>
       </block>
     </view>
