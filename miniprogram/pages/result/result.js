@@ -14,37 +14,65 @@ Page({
     orderMap: {},
     stitchedPath: '',
     version: '',
-    savedList: [] // 保存区列表：[{savedFilePath, name, size, time}]
+    savedList: [], // 保存区列表：[{savedFilePath, name, size, time}]
+    usePngIcons: true
+  },
+
+  // 任一图标加载失败时，降级为文字符号图标，避免报错闪烁
+  onIconFail() {
+    if (this.data.usePngIcons) {
+      this.setData({ usePngIcons: false })
+    }
   },
 
   onLoad() {
     // 获取处理结果数据
     const app = getApp()
     if (app.globalData.processedImages && app.globalData.processedImages.length > 0) {
-      // 读取保存区
-      let saved = []
-      try { saved = wx.getStorageSync('savedStitchResults') || [] } catch(e) { saved = [] }
-      // 填充可读时间
-      const mapped = Array.isArray(saved) ? saved.map(it => ({ ...it, timeText: this._formatTime(it.time), sizeText: this._formatSize(it.size) })) : []
+      // 读取优化记录（兼容旧键 savedStitchResults）
+      let savedNew = []
+      let savedOld = []
+      try { savedNew = wx.getStorageSync('optimizeRecords') || [] } catch (e) { savedNew = [] }
+      try { savedOld = wx.getStorageSync('savedStitchResults') || [] } catch (e) { savedOld = [] }
+      const merged = ([]).concat(Array.isArray(savedNew) ? savedNew : [], Array.isArray(savedOld) ? savedOld : [])
+      // 映射显示字段
+      const mapped = merged.map(it => ({ ...it, timeText: this._formatTime(it.time), sizeText: this._formatSize(it.size) }))
       this.setData({
         processedImages: app.globalData.processedImages,
         version: (app.globalData && app.globalData.version) || '1.4.2',
         savedList: mapped
       })
+      // 单张优化：自动加入优化记录（同页仅一次，避免重复）
+      if (!this.__autoSavedOnce && Array.isArray(app.globalData.processedImages) && app.globalData.processedImages.length === 1) {
+        this.__autoSavedOnce = true
+        const it = app.globalData.processedImages[0]
+        const url = it && it.processed
+        if (url) {
+          wx.nextTick(() => {
+            setTimeout(() => {
+              const name = `optimized_${Date.now()}.jpg`
+              this._saveToVault(url, name)
+            }, 16)
+          })
+        }
+      }
       // 进入结果页后确保关闭任何遗留的加载态，并清理批量锁
       try { wx.hideLoading() } catch(e) {}
       if (app && app.globalData) app.globalData.isBatchProcessing = false
     } else {
-      // 如果没有数据，返回首页
-      wx.showToast({
-        title: '没有找到处理结果',
-        icon: 'none'
+      // 无处理结果时，作为“优化记录”浏览入口使用：不跳转，仅加载记录列表
+      let savedNew = []
+      let savedOld = []
+      try { savedNew = wx.getStorageSync('optimizeRecords') || [] } catch (e) { savedNew = [] }
+      try { savedOld = wx.getStorageSync('savedStitchResults') || [] } catch (e) { savedOld = [] }
+      const merged = ([]).concat(Array.isArray(savedNew) ? savedNew : [], Array.isArray(savedOld) ? savedOld : [])
+      const mapped = merged.map(it => ({ ...it, timeText: this._formatTime(it.time), sizeText: this._formatSize(it.size) }))
+      const app = getApp()
+      this.setData({
+        processedImages: [],
+        version: (app && app.globalData && app.globalData.version) || '1.4.2',
+        savedList: mapped
       })
-      setTimeout(() => {
-        wx.redirectTo({
-          url: '/pages/index/index'
-        })
-      }, 1500)
     }
   },
 
@@ -326,8 +354,8 @@ Page({
             try { if (removed && removed.savedFilePath) wx.getFileSystemManager().unlinkSync(removed.savedFilePath) } catch (e) {}
           }
           this.setData({ savedList: list })
-          try { wx.setStorageSync('savedStitchResults', list) } catch(e) {}
-          wx.showToast({ title: '已保存到保存区', icon: 'success' })
+          try { wx.setStorageSync('optimizeRecords', list) } catch(e) {}
+          wx.showToast({ title: '已加入优化记录', icon: 'success' })
         },
         fail: () => wx.showToast({ title: '保存失败', icon: 'none' })
       })
@@ -382,7 +410,7 @@ Page({
     try { fs.unlinkSync(path) } catch(e) {}
     const list = (this.data.savedList || []).filter(i => i.savedFilePath !== path)
     this.setData({ savedList: list })
-    try { wx.setStorageSync('savedStitchResults', list) } catch(e) {}
+    try { wx.setStorageSync('optimizeRecords', list) } catch(e) {}
     wx.showToast({ title: '已删除', icon: 'success' })
   },
 
@@ -394,7 +422,7 @@ Page({
       try { if (it && it.savedFilePath) fs.unlinkSync(it.savedFilePath) } catch (e) {}
     }
     this.setData({ savedList: [] })
-    try { wx.setStorageSync('savedStitchResults', []) } catch (e) {}
+    try { wx.setStorageSync('optimizeRecords', []) } catch (e) {}
     wx.showToast({ title: '已清空', icon: 'success' })
   },
 

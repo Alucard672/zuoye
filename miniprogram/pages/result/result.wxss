@@ -507,7 +507,7 @@
 
 .vault-title {
   font-size: 32rpx;
-  font-weight: 600;
+  font-weight: 50;
   color: #333;
 }
 
@@ -558,10 +558,30 @@
   font-weight: 600; /* 日期加粗 */
 }
 
-.vault-actions {
+/* 底部一行：左侧大小，右侧按钮横排且靠右 */
+.meta-bottom {
   display: flex;
-  flex-direction: column;
-  gap: 8rpx;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.vault-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+/* 统一图标尺寸 */
+.action-icon {
+  width: 44rpx;
+  height: 44rpx;
+  display: block;
+}
+
+/* 兼容遗留样式占位（已不再使用列方向） */
+.vault-actions {
+  display: none;
 }
 
 .btn.mini {
@@ -572,6 +592,40 @@
   background: transparent;
   border: 2rpx solid #E5E5E5;
   color: #666;
+}
+
+/* 纯图标按钮（无边框/无背景） */
+.btn.mini.icon-only {
+  min-width: 0;
+  width: 64rpx;
+  height: 64rpx;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  line-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 纯图标按钮（无边框、无背景、更大） */
+.btn.mini.icon-only {
+  min-width: 0;
+  width: 64rpx;
+  height: 64rpx;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  font-size: 36rpx;
+  line-height: 64rpx;
+  text-align: center;
+  color: #4A90E2;
+}
+
+.btn.mini.icon-only.forward {
+  color: #52C41A;
 }
 
 .btn.mini.save {
@@ -585,8 +639,37 @@
 }
 
 .btn.mini.clear {
-  border-color: #ff7a45;
+  border-color: transparent;
   color: #ff7a45;
+}
+
+.icon-btn {
+  width: 72rpx;
+  height: 72rpx;
+  min-width: 72rpx;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  font-size: 0;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+}
+
+/* 清空图标按钮：仅图标，紧凑 */
+.icon-btn {
+  width: 56rpx;
+  height: 56rpx;
+  min-width: 56rpx;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 56rpx;
+  font-size: 32rpx;
+  border-radius: 50%;
 }
 
 .btn.mini.danger {

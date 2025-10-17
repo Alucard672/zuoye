@@ -36,6 +36,13 @@
   font-weight: 400;
 }
 
+/* 优化记录计数 */
+.opt-records {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #4A90E2;
+}
+
 /* 功能选项卡片 */
 .upload-options {
   margin-bottom: 80rpx;

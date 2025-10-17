@@ -4,7 +4,13 @@ Page({
     showGuide: false,
     selectedImages: [],
     processingLock: false,
-    version: ''
+    version: '',
+    optimizeCount: 0
+  },
+
+  // 进入优化记录页（仅查看记录也可进入）
+  goRecords() {
+    wx.navigateTo({ url: '/pages/result/result' })
   },
 
   onLoad() {
@@ -22,9 +28,13 @@ Page({
     // 同步全局批量处理状态，防止处理中误操作
     const app = getApp()
     const locked = !!(app && app.globalData && app.globalData.isBatchProcessing)
+    // 读取优化记录数量
+    let records = []
+    try { records = wx.getStorageSync('optimizeRecords') || [] } catch(e) { records = [] }
     this.setData({ 
       processingLock: locked,
-      version: (app && app.globalData && app.globalData.version) || '1.4.2'
+      version: (app && app.globalData && app.globalData.version) || '1.4.2',
+      optimizeCount: Array.isArray(records) ? records.length : 0
     })
     if (locked) {
       wx.showToast({ title: '正在批量处理，请稍候', icon: 'none' })

@@ -2,9 +2,7 @@
 <view class="container">
   <!-- 结果头部 -->
   <view class="result-header">
-    <view class="success-icon">
-      <image src="../../images/success-icon.png" class="icon-large"></image>
-    </view>
+
     <text class="success-title">优化完成！</text>
     <text class="success-subtitle">图片清晰度已显著提升</text>
   </view>
@@ -27,7 +25,7 @@
       </view>
       <checkbox-group bindchange="onSelectChange">
         <view class="select-list">
-          <block wx:for="{{processedImages}}" wx:key="processed">
+          <block wx:for="{{processedImages}}" wx:key="index">
             <view class="select-item">
               <!-- 勾选框放到缩略图右上角 -->
               <view class="checkbox-badge">
@@ -48,33 +46,48 @@
 
   </view>
 
-  <!-- 保存区（始终显示） -->
+  <!-- 优化记录（始终显示） -->
   <view class="vault-section">
     <view class="vault-header">
-      <text class="vault-title">保存区</text>
-      <view style="display:flex; align-items:center; gap:16rpx;">
-        <text class="vault-sub">已保存 {{savedList.length}} 个拼接结果</text>
-        <button wx:if="{{savedList.length}}" class="btn mini clear" size="mini" bindtap="clearVault">清空</button>
+      <text class="vault-title" style="width: 100rpx; display: block; box-sizing: border-box; position: relative; left: 0rpx; top: 0rpx">优化记录</text>
+      <view style="display:flex; align-items:center; gap:18rpx;">
+        <text class="vault-sub" style="text-align: center; color: #07c160; display: block; width: 422rpx; box-sizing: border-box">已保存 {{savedList.length}} 
+        （最多保留10条，超出将自动覆盖最早）</text>
+        <button wx:if="{{savedList.length}}" class="btn mini clear icon-btn" size="mini" bindtap="clearVault" aria-label="清空记录" style="margin-left: 1px; width: 72rpx; height: 74rpx; display: flex; align-items: center; justify-content: center; box-sizing: border-box; left: 0rpx; top: 0rpx">
+          <image class="action-icon" src="../../images/clean.png" mode="aspectFit" binderror="onIconFail"></image>
+        </button>
       </view>
     </view>
 
     <!-- 空状态 -->
     <view wx:if="{{!savedList.length}}" style="padding: 16rpx 8rpx; color:#999; font-size:24rpx;">
-      暂无保存内容，请先拼接并点击“保存到保存区”
+      暂无优化记录。单张优化会自动加入，拼接完成也会加入这里。
     </view>
 
     <view class="vault-list" wx:if="{{savedList.length}}">
-      <block wx:for="{{savedList}}" wx:key="savedFilePath">
+      <block wx:for="{{savedList}}" wx:key="index">
         <view class="vault-item">
           <image class="vault-thumb" src="{{item.savedFilePath}}" mode="aspectFill" bindtap="openSaved" data-path="{{item.savedFilePath}}"></image>
           <view class="vault-meta">
             <text class="vault-name">{{item.name}}</text>
             <text class="vault-time">{{item.timeText}}</text>
-            <text class="vault-size">{{item.sizeText}}</text>
-          </view>
-          <view class="vault-actions">
-            <button class="btn mini save" size="mini" bindtap="saveSavedToAlbum" data-path="{{item.savedFilePath}}">存相册</button>
-            <button class="btn mini forward" size="mini" bindtap="forwardSaved" data-path="{{item.savedFilePath}}">转发</button>
+            <view class="meta-bottom">
+              <text class="vault-size">{{item.sizeText}}</text>
+              <view class="vault-actions-row">
+                <button class="btn mini icon-only" size="mini" bindtap="saveSavedToAlbum" data-path="{{item.savedFilePath}}" aria-label="保存到相册">
+                  <block wx:if="{{usePngIcons}}">
+                    <image class="action-icon" src="../../images/save-icon.png" mode="aspectFit" binderror="onIconFail"></image>
+                  </block>
+                  <block wx:else>⬇</block>
+                </button>
+                <button class="btn mini icon-only" size="mini" bindtap="forwardSaved" data-path="{{item.savedFilePath}}" aria-label="转发">
+                  <block wx:if="{{usePngIcons}}">
+                    <image class="action-icon" src="../../images/icon-share.png" mode="aspectFit" binderror="onIconFail"></image>
+                  </block>
+                  <block wx:else></block>
+                </button>
+              </view>
+            </view>
           </view>
         </view>
       </block>
